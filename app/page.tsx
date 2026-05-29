@@ -21,6 +21,7 @@ export default function Home() {
 
   // Home screen state
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const videoRef = useRef<HTMLVideoElement>(null)
   const [homeDragging, setHomeDragging] = useState(false)
   const [homeHover, setHomeHover] = useState(false)
 
@@ -38,6 +39,16 @@ export default function Home() {
     const onScroll = () => setScrolled(window.scrollY > 80)
     window.addEventListener("scroll", onScroll, { passive: true })
     return () => window.removeEventListener("scroll", onScroll)
+  }, [])
+
+  // iOS Safari ignores autoplay HTML attributes — must call .play() programmatically
+  useEffect(() => {
+    const vid = videoRef.current
+    if (!vid) return
+    vid.muted = true // must set muted via JS too for iOS
+    vid.play().catch(() => {
+      // Autoplay blocked — fail silently, video stays paused
+    })
   }, [])
 
   const dynamicBgStyle = hasImage
@@ -299,6 +310,7 @@ export default function Home() {
         >
           {/* Background video — pointerEvents none so drag events reach the parent */}
           <video
+            ref={videoRef}
             autoPlay
             loop
             muted
