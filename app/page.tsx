@@ -293,18 +293,50 @@ export default function Home() {
             overflow: "hidden",
             cursor: "pointer",
             background: "#0a0a0a",
-            boxShadow: homeDragging ? "inset 0 0 80px rgba(255,255,255,0.04)" : "none",
-            transition: "box-shadow 0.3s ease, background 0.3s ease",
-            backgroundColor: homeHover ? "rgba(255,255,255,0.015)" : "#0a0a0a",
+            boxShadow: homeDragging ? "inset 0 0 80px rgba(255,255,255,0.08)" : "none",
+            transition: "box-shadow 0.3s ease",
           }}
         >
+          {/* Background video — pointerEvents none so drag events reach the parent */}
+          <video
+            autoPlay
+            loop
+            muted
+            playsInline
+            style={{
+              position: "absolute",
+              inset: 0,
+              width: "100%",
+              height: "100%",
+              objectFit: "cover",
+              zIndex: 0,
+              pointerEvents: "none",
+            }}
+          >
+            <source src="/home-bg.mp4" type="video/mp4" />
+          </video>
+
+          {/* Dark overlay — pointerEvents none so drag events reach the parent */}
+          <div
+            style={{
+              position: "absolute",
+              inset: 0,
+              background: homeHover
+                ? "rgba(0,0,0,0.55)"
+                : "rgba(0,0,0,0.65)",
+              transition: "background 0.4s ease",
+              zIndex: 1,
+              pointerEvents: "none",
+            }}
+          />
+
           {/* Top-left wordmark */}
           <div
             style={{
               position: "fixed",
               top: "24px",
               left: "24px",
-              zIndex: 20,
+              zIndex: 22,
               fontFamily: "var(--font-serif)",
               fontSize: "16px",
               color: "white",
@@ -316,8 +348,7 @@ export default function Home() {
             InRealLife
           </div>
 
-          {/* Giant background text — top/left 50% anchors to center; drift keyframe owns
-               the full transform including translate(-50%,-50%) so no static/animation conflict */}
+          {/* Giant background text */}
           <div
             style={{
               position: "absolute",
@@ -325,30 +356,30 @@ export default function Home() {
               left: "50%",
               fontFamily: "var(--font-serif)",
               fontSize: "clamp(120px, 22vw, 280px)",
-              color: "rgba(255,255,255,0.055)",
+              color: "rgba(255,255,255,0.07)",
               whiteSpace: "nowrap",
               lineHeight: 1,
               animation: "drift 40s linear infinite alternate",
               animationFillMode: "both",
               pointerEvents: "none",
               userSelect: "none",
-              zIndex: 0,
+              zIndex: 2,
             }}
           >
             InRealLife
           </div>
 
-          {/* Crosshair + label — centered */}
+          {/* Crosshair + label — slightly below center */}
           <div
             style={{
               position: "absolute",
-              top: "50%",
+              top: "75%",
               left: "50%",
               transform: "translate(-50%, -50%)",
               display: "flex",
               flexDirection: "column",
               alignItems: "center",
-              zIndex: 10,
+              zIndex: 12,
               pointerEvents: "none",
             }}
           >
@@ -384,7 +415,7 @@ export default function Home() {
                 transition: "color 0.3s ease",
               }}
             >
-              drop your fit
+              drop your fit bish
             </p>
           </div>
 
