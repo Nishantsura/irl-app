@@ -21,7 +21,6 @@ export default function Home() {
 
   // Home screen state
   const fileInputRef = useRef<HTMLInputElement>(null)
-  const videoRef = useRef<HTMLVideoElement>(null)
   const [homeDragging, setHomeDragging] = useState(false)
   const [homeHover, setHomeHover] = useState(false)
 
@@ -41,15 +40,7 @@ export default function Home() {
     return () => window.removeEventListener("scroll", onScroll)
   }, [])
 
-  // iOS Safari ignores autoplay HTML attributes — must call .play() programmatically
-  useEffect(() => {
-    const vid = videoRef.current
-    if (!vid) return
-    vid.muted = true // must set muted via JS too for iOS
-    vid.play().catch(() => {
-      // Autoplay blocked — fail silently, video stays paused
-    })
-  }, [])
+  // No separate useEffect needed — play() is called in the ref callback below
 
   const dynamicBgStyle = hasImage
     ? {
@@ -308,13 +299,21 @@ export default function Home() {
             transition: "box-shadow 0.3s ease",
           }}
         >
-          {/* Background video — pointerEvents none so drag events reach the parent */}
+          {/* Background video — ref callback sets muted + calls play() synchronously
+               the instant the element hits the DOM, before iOS can block autoplay.
+               React's muted prop doesn't write the HTML attribute (known bug),
+               so defaultMuted=true via JS is the only reliable iOS fix. */}
           <video
-            ref={videoRef}
+            ref={(el) => {
+              if (!el) return
+              el.defaultMuted = true  // writes the muted HTML attribute iOS checks
+              el.muted = true         // sets the JS property
+              el.play().catch(() => {}) // trigger play — iOS allows muted+playsInline
+            }}
             autoPlay
             loop
-            muted
             playsInline
+            preload="auto"
             style={{
               position: "absolute",
               inset: 0,
