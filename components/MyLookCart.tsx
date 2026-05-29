@@ -14,91 +14,208 @@ interface Props {
 export default function MyLookCart({ open, onClose, selectedItems, clothingItems, totalFormatted, onRemove }: Props) {
   const selectedCount = Object.keys(selectedItems).length
 
-  function getCategoryForId(id: string): string {
-    const item = clothingItems.find((c) => c.id === id)
+  function getCategoryForId(key: string): string {
+    // Key is composite: "${itemId}__${productLink}" — extract the itemId part
+    const itemId = key.split("__")[0]
+    const item = clothingItems.find((c) => c.id === itemId)
     return item ? item.category : "item"
   }
 
   return (
     <>
-      {open && (
-        <div
-          className="fixed inset-0 bg-black/40 z-40 transition-opacity"
-          onClick={onClose}
-        />
-      )}
+      {/* Overlay */}
+      <div
+        onClick={onClose}
+        style={{
+          position: "fixed",
+          inset: 0,
+          background: "rgba(0,0,0,0.5)",
+          zIndex: 99,
+          opacity: open ? 1 : 0,
+          pointerEvents: open ? "auto" : "none",
+          transition: "opacity 0.3s ease",
+        }}
+      />
 
-      <div className={`
-        fixed top-0 right-0 h-full w-full sm:w-96 bg-white z-50 shadow-2xl
-        transform transition-transform duration-300 ease-in-out flex flex-col
-        ${open ? "translate-x-0" : "translate-x-full"}
-      `}>
-        <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
-          <h2 className="text-lg font-bold text-gray-900">My Look</h2>
-          <button
-            onClick={onClose}
-            className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-gray-100 transition-colors text-gray-500 hover:text-gray-800"
-          >
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-            </svg>
-          </button>
+      {/* Cart panel */}
+      <div
+        style={{
+          position: "fixed",
+          top: 0,
+          right: 0,
+          height: "100%",
+          width: "min(400px, 100vw)",
+          zIndex: 100,
+          display: "flex",
+          flexDirection: "column",
+          background: "rgba(10,10,10,0.92)",
+          backdropFilter: "blur(24px)",
+          borderLeft: "1px solid rgba(255,255,255,0.08)",
+          transform: open ? "translateX(0)" : "translateX(100%)",
+          transition: "transform 0.4s cubic-bezier(0.4, 0, 0.2, 1)",
+        }}
+      >
+        {/* Header */}
+        <div style={{ padding: "24px 24px 0" }}>
+          <div className="flex items-center justify-between">
+            <h2 style={{
+              fontFamily: "var(--font-serif)",
+              fontSize: "28px",
+              color: "white",
+              letterSpacing: "-0.5px",
+            }}>
+              My Look
+            </h2>
+            <button
+              onClick={onClose}
+              style={{
+                background: "none",
+                border: "none",
+                cursor: "pointer",
+                color: "rgba(255,255,255,0.4)",
+                fontSize: "24px",
+                lineHeight: 1,
+                padding: "4px",
+                transition: "color 0.15s ease",
+              }}
+              onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.color = "white" }}
+              onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.color = "rgba(255,255,255,0.4)" }}
+            >
+              ×
+            </button>
+          </div>
+          <div style={{ height: "1px", background: "rgba(255,255,255,0.08)", marginTop: "20px" }} />
         </div>
 
-        <div className="flex-1 overflow-y-auto">
+        {/* Items list */}
+        <div style={{ flex: 1, overflowY: "auto", padding: "0 24px" }}>
           {selectedCount === 0 ? (
-            <div className="flex flex-col items-center justify-center h-full gap-3 px-8 text-center">
-              <div className="w-14 h-14 rounded-full bg-gray-100 flex items-center justify-center">
-                <svg className="w-7 h-7 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5}
-                    d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z" />
-                </svg>
-              </div>
-              <p className="text-gray-500 text-sm">Add items from your outfit to see them here</p>
+            <div className="flex flex-col items-center justify-center h-full gap-3 text-center">
+              <svg width="40" height="40" fill="none" stroke="rgba(255,255,255,0.15)" strokeWidth="1.5" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round"
+                  d="M15.75 10.5V6a3.75 3.75 0 10-7.5 0v4.5m11.356-1.993l1.263 12c.07.665-.45 1.243-1.119 1.243H4.25a1.125 1.125 0 01-1.12-1.243l1.264-12A1.125 1.125 0 015.513 7.5h12.974c.576 0 1.059.435 1.119 1.007z" />
+              </svg>
+              <p style={{ fontFamily: "var(--font-serif)", fontSize: "20px", color: "rgba(255,255,255,0.4)" }}>
+                Your look is empty
+              </p>
+              <p style={{ fontFamily: "var(--font-dm-sans)", fontWeight: 400, fontSize: "13px", color: "rgba(255,255,255,0.25)" }}>
+                Add items from your outfit
+              </p>
             </div>
           ) : (
-            <div className="px-5 py-4 flex flex-col gap-4">
-              {Object.entries(selectedItems).map(([itemId, product]: [string, Product]) => (
-                <div key={itemId} className="flex gap-3 items-start">
-                  <div className="w-14 h-14 flex-shrink-0 rounded-lg overflow-hidden bg-gray-100">
-                    {product.imageUrl ? (
-                      <img
-                        src={product.imageUrl}
-                        alt={product.title}
-                        className="w-full h-full object-cover"
-                      />
-                    ) : (
-                      <div className="w-full h-full flex items-center justify-center">
-                        <svg className="w-6 h-6 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5}
-                            d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                        </svg>
+            <div style={{ paddingTop: "20px" }}>
+              {Object.entries(selectedItems).map(([itemId, product]: [string, Product], index) => (
+                <div key={itemId}>
+                  {index > 0 && (
+                    <div style={{ height: "1px", background: "rgba(255,255,255,0.06)", margin: "16px 0" }} />
+                  )}
+                  <div>
+                    {/* Row: thumb + info + remove */}
+                    <div className="flex gap-3 items-start">
+                      <div style={{
+                        width: "64px",
+                        height: "64px",
+                        flexShrink: 0,
+                        borderRadius: "8px",
+                        overflow: "hidden",
+                        background: "#1e1e1e",
+                      }}>
+                        {product.imageUrl ? (
+                          <img
+                            src={product.imageUrl}
+                            alt={product.title}
+                            className="w-full h-full object-cover"
+                          />
+                        ) : (
+                          <div className="w-full h-full flex items-center justify-center">
+                            <svg width="24" height="24" fill="none" stroke="rgba(255,255,255,0.2)" strokeWidth="1.5" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round"
+                                d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                            </svg>
+                          </div>
+                        )}
                       </div>
-                    )}
-                  </div>
 
-                  <div className="flex-1 min-w-0">
-                    <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide">
-                      {getCategoryForId(itemId)}
-                    </p>
-                    <p className="text-sm font-medium text-gray-800 truncate">{product.brand}</p>
-                    <p className="text-sm font-bold text-black">{product.priceFormatted}</p>
-                    <div className="flex items-center gap-3 mt-1.5">
-                      <a
-                        href={product.link}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="text-xs font-semibold text-black underline underline-offset-2 hover:text-gray-600 transition-colors"
-                      >
-                        Buy on {product.source} →
-                      </a>
+                      <div style={{ flex: 1, minWidth: 0, paddingLeft: "4px" }}>
+                        <p style={{
+                          fontFamily: "var(--font-dm-sans)",
+                          fontWeight: 600,
+                          fontSize: "10px",
+                          color: "rgba(255,255,255,0.4)",
+                          letterSpacing: "1px",
+                          textTransform: "uppercase",
+                          marginBottom: "2px",
+                        }}>
+                          {getCategoryForId(itemId)}
+                        </p>
+                        <p style={{
+                          fontFamily: "var(--font-dm-sans)",
+                          fontWeight: 500,
+                          fontSize: "14px",
+                          color: "white",
+                          overflow: "hidden",
+                          textOverflow: "ellipsis",
+                          whiteSpace: "nowrap",
+                        }}>
+                          {product.brand}
+                        </p>
+                        <p style={{
+                          fontFamily: "var(--font-dm-sans)",
+                          fontWeight: 600,
+                          fontSize: "16px",
+                          color: "white",
+                          marginTop: "2px",
+                        }}>
+                          {product.priceFormatted}
+                        </p>
+                      </div>
+
                       <button
                         onClick={() => onRemove(itemId)}
-                        className="text-xs text-gray-400 hover:text-red-500 transition-colors"
+                        style={{
+                          background: "none",
+                          border: "none",
+                          cursor: "pointer",
+                          color: "rgba(255,255,255,0.25)",
+                          fontSize: "18px",
+                          lineHeight: 1,
+                          padding: "4px",
+                          flexShrink: 0,
+                          transition: "color 0.15s ease",
+                        }}
+                        onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.color = "rgba(255,255,255,0.7)" }}
+                        onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.color = "rgba(255,255,255,0.25)" }}
                       >
-                        Remove
+                        ×
                       </button>
                     </div>
+
+                    {/* Buy button */}
+                    <a
+                      href={product.link}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="flex items-center justify-center transition-all duration-150 hover:bg-white/10"
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        height: "40px",
+                        marginTop: "10px",
+                        borderRadius: "8px",
+                        border: "1px solid rgba(255,255,255,0.15)",
+                        background: "transparent",
+                        fontFamily: "var(--font-dm-sans)",
+                        fontWeight: 500,
+                        fontSize: "13px",
+                        color: "white",
+                        textDecoration: "none",
+                      }}
+                      onMouseEnter={(e) => { (e.currentTarget as HTMLAnchorElement).style.background = "rgba(255,255,255,0.08)" }}
+                      onMouseLeave={(e) => { (e.currentTarget as HTMLAnchorElement).style.background = "transparent" }}
+                    >
+                      Buy on {product.source} →
+                    </a>
                   </div>
                 </div>
               ))}
@@ -106,13 +223,42 @@ export default function MyLookCart({ open, onClose, selectedItems, clothingItems
           )}
         </div>
 
+        {/* Footer */}
         {selectedCount > 0 && (
-          <div className="border-t border-gray-100 px-5 py-4">
-            <div className="flex items-center justify-between mb-1">
-              <span className="text-sm text-gray-500">Estimated Total</span>
-            </div>
-            <p className="text-2xl font-bold text-black mb-1">{totalFormatted}</p>
-            <p className="text-xs text-gray-400">Final prices on retailer site may vary</p>
+          <div style={{
+            borderTop: "1px solid rgba(255,255,255,0.08)",
+            padding: "20px 24px",
+            background: "rgba(10,10,10,0.95)",
+          }}>
+            <p style={{
+              fontFamily: "var(--font-dm-sans)",
+              fontWeight: 400,
+              fontSize: "13px",
+              color: "rgba(255,255,255,0.4)",
+              letterSpacing: "1px",
+              textTransform: "uppercase",
+              marginBottom: "4px",
+            }}>
+              Estimated Total
+            </p>
+            <p style={{
+              fontFamily: "var(--font-serif)",
+              fontSize: "36px",
+              color: "white",
+              letterSpacing: "-1px",
+              lineHeight: 1.1,
+            }}>
+              {totalFormatted}
+            </p>
+            <p style={{
+              fontFamily: "var(--font-dm-sans)",
+              fontWeight: 400,
+              fontSize: "11px",
+              color: "rgba(255,255,255,0.25)",
+              marginTop: "6px",
+            }}>
+              Final prices on retailer site
+            </p>
           </div>
         )}
       </div>

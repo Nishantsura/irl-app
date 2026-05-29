@@ -1,8 +1,8 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect, useRef, ChangeEvent, DragEvent } from "react"
 import { ClothingItem, Product, ProductResults, SelectedItems, SearchingState } from "@/types"
-import ImageUploader from "@/components/ImageUploader"
+import { extractColorFromImage, applyColorToDom, resetColorOnDom } from "@/lib/extractColor"
 import OutfitBreakdown from "@/components/OutfitBreakdown"
 import MyLookCart from "@/components/MyLookCart"
 
@@ -15,10 +15,36 @@ export default function Home() {
   const [searchingItems, setSearchingItems] = useState<SearchingState>({})
   const [cartOpen, setCartOpen] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [scrolled, setScrolled] = useState(false)
+  const [hasImage, setHasImage] = useState(false)
+
+  // Home screen state
+  const fileInputRef = useRef<HTMLInputElement>(null)
+  const [homeDragging, setHomeDragging] = useState(false)
+  const [homeHover, setHomeHover] = useState(false)
 
   const selectedCount = Object.keys(selectedItems).length
   const totalPrice = Object.values(selectedItems).reduce((sum, p) => sum + p.price, 0)
   const totalFormatted = `₹${totalPrice.toLocaleString("en-IN")}`
+  const isHome = !uploadedImage && !isAnalyzing
+
+  useEffect(() => {
+    const onScroll = () => setScrolled(window.scrollY > 80)
+    window.addEventListener("scroll", onScroll, { passive: true })
+    return () => window.removeEventListener("scroll", onScroll)
+  }, [])
+
+  const dynamicBgStyle = hasImage
+    ? {
+        background: `linear-gradient(180deg,
+          rgba(var(--color-vibrant-rgb), 0.85) 0%,
+          rgba(var(--color-vibrant-rgb), 0.4) 25%,
+          rgba(var(--color-vibrant-rgb), 0.15) 45%,
+          #0a0a0a 70%
+        )`,
+        transition: "background 1.2s cubic-bezier(0.4, 0, 0.2, 1)",
+      }
+    : {}
 
   async function searchForItem(item: ClothingItem) {
     setSearchingItems((prev) => ({ ...prev, [item.id]: true }))
@@ -41,7 +67,13 @@ export default function Home() {
     setSearchingItems({})
 
     const reader = new FileReader()
-    reader.onload = (e) => setUploadedImage(e.target?.result as string)
+    reader.onload = async (e) => {
+      const dataUrl = e.target?.result as string
+      setUploadedImage(dataUrl)
+      setHasImage(true)
+      const palette = await extractColorFromImage(dataUrl)
+      applyColorToDom(palette)
+    }
     reader.readAsDataURL(file)
 
     setIsAnalyzing(true)
@@ -50,17 +82,9 @@ export default function Home() {
       formData.append("image", file)
       const res = await fetch("/api/analyze", { method: "POST", body: formData })
       const data = await res.json()
-
-      if (data.error) {
-        setError(data.error)
-        return
-      }
-
+      if (data.error) { setError(data.error); return }
       setClothingItems(data.items)
-
-      data.items.forEach((item: ClothingItem) => {
-        searchForItem(item)
-      })
+      data.items.forEach((item: ClothingItem) => searchForItem(item))
     } catch {
       setError("Something went wrong. Please try again.")
     } finally {
@@ -68,14 +92,46 @@ export default function Home() {
     }
   }
 
+  // Home screen file handlers
+  function validateAndUpload(file: File) {
+    const validTypes = ["image/jpeg", "image/png", "image/webp"]
+    if (!validTypes.includes(file.type) || file.size > 5 * 1024 * 1024) return
+    handleImageUpload(file)
+  }
+
+  function handleHomeFileChange(e: ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    if (file) validateAndUpload(file)
+  }
+
+  function handleHomeDragOver(e: DragEvent<HTMLDivElement>) {
+    e.preventDefault()
+    setHomeDragging(true)
+  }
+
+  function handleHomeDragLeave(e: DragEvent<HTMLDivElement>) {
+    e.preventDefault()
+    if (e.currentTarget.contains(e.relatedTarget as Node)) return
+    setHomeDragging(false)
+  }
+
+  function handleHomeDrop(e: DragEvent<HTMLDivElement>) {
+    e.preventDefault()
+    setHomeDragging(false)
+    const file = e.dataTransfer.files?.[0]
+    if (file) validateAndUpload(file)
+  }
+
   function handleAddToLook(itemId: string, product: Product) {
+    // Key is composite so multiple products from the same category can be selected
+    const key = `${itemId}__${product.link}`
     setSelectedItems((prev) => {
-      if (prev[itemId]?.link === product.link) {
+      if (prev[key]) {
         const updated = { ...prev }
-        delete updated[itemId]
+        delete updated[key]
         return updated
       }
-      return { ...prev, [itemId]: product }
+      return { ...prev, [key]: product }
     })
   }
 
@@ -89,6 +145,7 @@ export default function Home() {
 
   function handleReset() {
     setUploadedImage(null)
+    setHasImage(false)
     setClothingItems([])
     setProductResults({})
     setSelectedItems({})
@@ -96,132 +153,353 @@ export default function Home() {
     setSearchingItems({})
     setCartOpen(false)
     setError(null)
+    resetColorOnDom()
   }
 
   return (
-    <div className="min-h-screen bg-white">
-      {/* Navbar */}
-      <nav className="fixed top-0 left-0 right-0 z-30 bg-white/90 backdrop-blur border-b border-gray-100">
-        <div className="max-w-6xl mx-auto px-4 h-14 flex items-center justify-between">
-          <span className="text-xl font-black tracking-tight text-black">IRL</span>
-          <span className="hidden sm:block text-sm text-gray-400 font-medium">See it. Wear it.</span>
-          {selectedCount > 0 ? (
+    <div className="min-h-screen" style={{ backgroundColor: "#0a0a0a" }}>
+
+      {/* ── Navbar (hidden on home — wordmark takes its place) ── */}
+      {!isHome && (
+        <nav
+          className="fixed top-0 left-0 right-0 z-50 transition-all duration-300"
+          style={{
+            background: scrolled ? "rgba(10,10,10,0.85)" : "transparent",
+            backdropFilter: scrolled ? "blur(20px)" : "none",
+            borderBottom: scrolled ? "1px solid rgba(255,255,255,0.06)" : "none",
+          }}
+        >
+          <div style={{ maxWidth: "1152px", margin: "0 auto", padding: "0 32px", height: "64px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
             <button
-              onClick={() => setCartOpen(true)}
-              className="flex items-center gap-2 px-4 py-2 bg-black text-white text-sm font-semibold rounded-full hover:bg-gray-800 transition-colors"
+              onClick={handleReset}
+              style={{
+                background: "none",
+                border: "none",
+                cursor: "pointer",
+                fontFamily: "var(--font-serif)",
+                fontSize: "28px",
+                color: "white",
+                letterSpacing: "-0.5px",
+                padding: 0,
+              }}
             >
-              <span>My Look</span>
-              <span className="w-5 h-5 bg-white text-black text-xs font-bold rounded-full flex items-center justify-center">
-                {selectedCount}
-              </span>
-              <span>→</span>
+              IRL
             </button>
-          ) : (
-            <div className="w-24" />
-          )}
-        </div>
-      </nav>
 
-      {/* Main content */}
-      <main className="pt-14">
-        {/* State A: No image uploaded */}
-        {!uploadedImage && !isAnalyzing && (
-          <div className="min-h-[calc(100vh-3.5rem)] flex flex-col items-center justify-center px-4 py-12">
-            <div className="w-full max-w-lg">
-              <div className="text-center mb-8">
-                <h1 className="text-4xl font-black text-black mb-2">See it. Wear it.</h1>
-                <p className="text-gray-500">Upload any outfit and shop every piece instantly.</p>
-              </div>
-              <ImageUploader onImageSelected={handleImageUpload} />
-            </div>
-          </div>
-        )}
-
-        {/* State B: Analyzing */}
-        {isAnalyzing && (
-          <div className="fixed inset-0 bg-black/70 z-40 flex flex-col items-center justify-center gap-4">
-            <div className="w-12 h-12 border-4 border-white/30 border-t-white rounded-full animate-spin" />
-            <div className="text-center">
-              <p className="text-white text-lg font-semibold">Analyzing your outfit...</p>
-              <p className="text-white/60 text-sm mt-1">Identifying every clothing piece</p>
-            </div>
-          </div>
-        )}
-
-        {/* Error banner */}
-        {error && (
-          <div className="max-w-6xl mx-auto px-4 pt-4">
-            <div className="flex items-center justify-between bg-red-50 border border-red-200 rounded-xl px-4 py-3">
-              <p className="text-red-700 text-sm">{error}</p>
+            {selectedCount > 0 && (
               <button
-                onClick={handleReset}
-                className="text-sm font-semibold text-red-700 hover:text-red-900 ml-4 underline"
+                onClick={() => setCartOpen(true)}
+                className="flex items-center gap-2 px-5 py-2 rounded-full text-white text-sm transition-all duration-150 hover:bg-white/10"
+                style={{
+                  border: "1px solid rgba(255,255,255,0.2)",
+                  fontFamily: "var(--font-dm-sans)",
+                  fontWeight: 500,
+                }}
               >
-                Try again
+                My Look · {selectedCount}
               </button>
-            </div>
+            )}
           </div>
-        )}
+        </nav>
+      )}
 
-        {/* State C: Results */}
-        {uploadedImage && !isAnalyzing && clothingItems.length > 0 && (
-          <div className="max-w-6xl mx-auto px-4 py-6">
-            <div className="flex flex-col lg:flex-row gap-6">
-              {/* Left column */}
-              <div className="lg:w-2/5 lg:sticky lg:top-20 lg:self-start">
-                <div className="rounded-2xl overflow-hidden border border-gray-100 shadow-sm">
-                  <img
-                    src={uploadedImage}
-                    alt="Your outfit"
-                    className="w-full object-cover max-h-[70vh]"
-                  />
-                </div>
-                <div className="mt-3 flex items-center justify-between">
-                  <span className="inline-flex items-center gap-1.5 text-sm font-medium text-green-700 bg-green-50 px-3 py-1.5 rounded-full">
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
-                    </svg>
-                    {clothingItems.length} items identified
-                  </span>
-                  <button
-                    onClick={handleReset}
-                    className="text-sm text-gray-500 hover:text-black transition-colors underline underline-offset-2"
-                  >
-                    Upload new outfit
-                  </button>
-                </div>
-              </div>
+      {/* ── STATE A: Home Screen ── */}
+      {isHome && (
+        <div
+          onClick={() => fileInputRef.current?.click()}
+          onDragOver={handleHomeDragOver}
+          onDragLeave={handleHomeDragLeave}
+          onDrop={handleHomeDrop}
+          onMouseEnter={() => setHomeHover(true)}
+          onMouseLeave={() => setHomeHover(false)}
+          style={{
+            position: "relative",
+            width: "100vw",
+            height: "100vh",
+            overflow: "hidden",
+            cursor: "pointer",
+            background: "#0a0a0a",
+            boxShadow: homeDragging ? "inset 0 0 80px rgba(255,255,255,0.04)" : "none",
+            transition: "box-shadow 0.3s ease, background 0.3s ease",
+            backgroundColor: homeHover ? "rgba(255,255,255,0.015)" : "#0a0a0a",
+          }}
+        >
+          {/* Top-left wordmark */}
+          <div
+            style={{
+              position: "fixed",
+              top: "24px",
+              left: "24px",
+              zIndex: 20,
+              fontFamily: "var(--font-serif)",
+              fontSize: "16px",
+              color: "white",
+              letterSpacing: "-0.3px",
+              fontWeight: 400,
+              pointerEvents: "none",
+            }}
+          >
+            InRealLife
+          </div>
 
-              {/* Right column */}
-              <div className="lg:w-3/5">
-                <OutfitBreakdown
-                  clothingItems={clothingItems}
-                  productResults={productResults}
-                  searchingItems={searchingItems}
-                  selectedItems={selectedItems}
-                  onAddToLook={handleAddToLook}
+          {/* Giant background text — top/left 50% anchors to center; drift keyframe owns
+               the full transform including translate(-50%,-50%) so no static/animation conflict */}
+          <div
+            style={{
+              position: "absolute",
+              top: "50%",
+              left: "50%",
+              fontFamily: "var(--font-serif)",
+              fontSize: "clamp(120px, 22vw, 280px)",
+              color: "rgba(255,255,255,0.055)",
+              whiteSpace: "nowrap",
+              lineHeight: 1,
+              animation: "drift 40s linear infinite alternate",
+              animationFillMode: "both",
+              pointerEvents: "none",
+              userSelect: "none",
+              zIndex: 0,
+            }}
+          >
+            InRealLife
+          </div>
+
+          {/* Crosshair + label — centered */}
+          <div
+            style={{
+              position: "absolute",
+              top: "50%",
+              left: "50%",
+              transform: "translate(-50%, -50%)",
+              display: "flex",
+              flexDirection: "column",
+              alignItems: "center",
+              zIndex: 10,
+              pointerEvents: "none",
+            }}
+          >
+            <div style={{ animation: "pulse-crosshair 3s ease-in-out infinite" }}>
+              <svg width="72" height="72" viewBox="0 0 72 72" fill="none">
+                <line
+                  x1="36" y1="0" x2="36" y2="72"
+                  stroke="white"
+                  strokeWidth="1"
+                  strokeOpacity={homeHover ? "1" : "0.9"}
+                  style={{ transition: "stroke-opacity 0.3s ease" }}
                 />
+                <line
+                  x1="0" y1="36" x2="72" y2="36"
+                  stroke="white"
+                  strokeWidth="1"
+                  strokeOpacity={homeHover ? "1" : "0.9"}
+                  style={{ transition: "stroke-opacity 0.3s ease" }}
+                />
+                <circle cx="36" cy="36" r="3" fill="white" fillOpacity="0.9" />
+              </svg>
+            </div>
 
-                {/* Sticky bar */}
-                {selectedCount > 0 && (
-                  <div className="sticky bottom-4 mt-6">
-                    <button
-                      onClick={() => setCartOpen(true)}
-                      className="w-full py-4 bg-black text-white font-semibold rounded-2xl shadow-lg hover:bg-gray-800 transition-colors flex items-center justify-center gap-2"
+            <p
+              style={{
+                marginTop: "20px",
+                fontFamily: "var(--font-dm-sans)",
+                fontWeight: 300,
+                fontSize: "14px",
+                color: homeHover ? "rgba(255,255,255,0.7)" : "rgba(255,255,255,0.4)",
+                letterSpacing: "0.5px",
+                textAlign: "center",
+                transition: "color 0.3s ease",
+              }}
+            >
+              drop your fit
+            </p>
+          </div>
+
+          {/* Hidden file input */}
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="image/jpeg,image/png,image/webp"
+            onChange={handleHomeFileChange}
+            onClick={(e) => e.stopPropagation()}
+            style={{ display: "none" }}
+          />
+        </div>
+      )}
+
+      {/* ── STATE B: Analyzing ── */}
+      {isAnalyzing && (
+        <div
+          className="fixed inset-0 z-40 flex flex-col items-center justify-center gap-6"
+          style={{ backgroundColor: "rgba(10,10,10,0.6)" }}
+        >
+          <div
+            className="animate-spin-custom"
+            style={{
+              width: 48,
+              height: 48,
+              borderRadius: "50%",
+              border: "2px solid rgba(255,255,255,0.1)",
+              borderTop: "2px solid white",
+            }}
+          />
+          <div className="text-center">
+            <p
+              className="text-white"
+              style={{ fontFamily: "var(--font-serif)", fontSize: "28px", letterSpacing: "-0.5px" }}
+            >
+              Analyzing your outfit
+            </p>
+            <p
+              className="text-white/50 mt-2"
+              style={{ fontFamily: "var(--font-dm-sans)", fontWeight: 300, fontSize: "15px" }}
+            >
+              Identifying every piece...
+            </p>
+          </div>
+        </div>
+      )}
+
+      {/* ── Dynamic gradient wrapper for results ── */}
+      {!isHome && (
+        <main className="min-h-screen" style={dynamicBgStyle}>
+
+          {/* Error */}
+          {error && (
+            <div style={{ maxWidth: "1152px", margin: "0 auto", padding: "96px 32px 0" }}>
+              <div
+                className="flex items-center justify-between rounded-xl px-5 py-4"
+                style={{ background: "rgba(239,68,68,0.1)", border: "1px solid rgba(239,68,68,0.2)" }}
+              >
+                <p className="text-red-400 text-sm" style={{ fontFamily: "var(--font-dm-sans)" }}>
+                  {error}
+                </p>
+                <button
+                  onClick={handleReset}
+                  className="text-red-400 hover:text-red-300 transition-colors text-sm underline ml-4"
+                  style={{ fontFamily: "var(--font-dm-sans)", fontWeight: 500 }}
+                >
+                  Try again
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* STATE C: Results */}
+          {uploadedImage && !isAnalyzing && clothingItems.length > 0 && (
+            <div style={{ maxWidth: "1152px", margin: "0 auto", padding: "96px 32px 80px" }}>
+              <div style={{ display: "flex", flexDirection: "row", gap: "56px", alignItems: "flex-start" }}>
+
+                {/* Left column — sticky image panel */}
+                <div style={{ width: "380px", flexShrink: 0, position: "sticky", top: "88px", alignSelf: "flex-start" }}>
+                  {/* Image container — object-contain so nothing is cropped */}
+                  <div
+                    style={{
+                      borderRadius: "16px",
+                      overflow: "hidden",
+                      background: "#111",
+                      boxShadow: "0 24px 56px rgba(0,0,0,0.6)",
+                    }}
+                  >
+                    <img
+                      src={uploadedImage}
+                      alt="Your outfit"
+                      style={{
+                        width: "100%",
+                        height: "auto",
+                        maxHeight: "560px",
+                        objectFit: "contain",
+                        display: "block",
+                      }}
+                    />
+                  </div>
+
+                  {/* Meta row below image */}
+                  <div style={{ marginTop: "16px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                    <span
+                      style={{
+                        display: "inline-flex",
+                        alignItems: "center",
+                        borderRadius: "999px",
+                        padding: "6px 14px",
+                        border: "1px solid rgba(255,255,255,0.12)",
+                        fontFamily: "var(--font-dm-sans)",
+                        fontWeight: 500,
+                        fontSize: "11px",
+                        color: "rgba(255,255,255,0.5)",
+                        letterSpacing: "0.8px",
+                        textTransform: "uppercase",
+                      }}
                     >
-                      View My Look
-                      <span className="bg-white text-black text-xs font-bold rounded-full w-5 h-5 flex items-center justify-center">
-                        {selectedCount}
-                      </span>
-                      →
+                      {clothingItems.length} items found
+                    </span>
+                    <button
+                      onClick={handleReset}
+                      style={{
+                        fontFamily: "var(--font-dm-sans)",
+                        fontWeight: 400,
+                        fontSize: "13px",
+                        color: "rgba(255,255,255,0.3)",
+                        textDecoration: "underline",
+                        textUnderlineOffset: "3px",
+                        background: "none",
+                        border: "none",
+                        cursor: "pointer",
+                        padding: 0,
+                        transition: "color 0.15s ease",
+                      }}
+                      onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.color = "rgba(255,255,255,0.65)" }}
+                      onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.color = "rgba(255,255,255,0.3)" }}
+                    >
+                      Upload new ↑
                     </button>
                   </div>
-                )}
+                </div>
+
+                {/* Right column — outfit breakdown, fills remaining width */}
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <OutfitBreakdown
+                    clothingItems={clothingItems}
+                    productResults={productResults}
+                    searchingItems={searchingItems}
+                    selectedItems={selectedItems}
+                    onAddToLook={handleAddToLook}
+                  />
+
+                  {selectedCount > 0 && (
+                    <div style={{ position: "sticky", bottom: "16px", marginTop: "32px" }}>
+                      <button
+                        onClick={() => setCartOpen(true)}
+                        style={{
+                          width: "100%",
+                          height: "56px",
+                          borderRadius: "14px",
+                          background: "rgba(255,255,255,0.1)",
+                          border: "1px solid rgba(255,255,255,0.18)",
+                          backdropFilter: "blur(16px)",
+                          fontFamily: "var(--font-dm-sans)",
+                          fontWeight: 500,
+                          fontSize: "15px",
+                          color: "white",
+                          cursor: "pointer",
+                          transition: "background 0.15s ease",
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          gap: "8px",
+                        }}
+                        onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.background = "rgba(255,255,255,0.16)" }}
+                        onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.background = "rgba(255,255,255,0.1)" }}
+                      >
+                        View My Look · {selectedCount} {selectedCount === 1 ? "item" : "items"}
+                      </button>
+                    </div>
+                  )}
+                </div>
               </div>
             </div>
-          </div>
-        )}
-      </main>
+          )}
+        </main>
+      )}
 
       <MyLookCart
         open={cartOpen}

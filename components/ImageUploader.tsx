@@ -13,21 +13,14 @@ export default function ImageUploader({ onImageSelected }: Props) {
 
   function validate(file: File): string | null {
     const validTypes = ["image/jpeg", "image/png", "image/webp"]
-    if (!validTypes.includes(file.type)) {
-      return "Invalid file type. Use JPG, PNG, or WEBP."
-    }
-    if (file.size > 5 * 1024 * 1024) {
-      return "File too large. Maximum 5MB."
-    }
+    if (!validTypes.includes(file.type)) return "Invalid file type. Use JPG, PNG, or WEBP."
+    if (file.size > 5 * 1024 * 1024) return "File too large. Maximum 5MB."
     return null
   }
 
   function handleFile(file: File) {
     const err = validate(file)
-    if (err) {
-      setValidationError(err)
-      return
-    }
+    if (err) { setValidationError(err); return }
     setValidationError(null)
     onImageSelected(file)
   }
@@ -61,37 +54,62 @@ export default function ImageUploader({ onImageSelected }: Props) {
         onDragOver={handleDragOver}
         onDragLeave={handleDragLeave}
         onDrop={handleDrop}
-        className={`
-          border-2 border-dashed rounded-2xl p-12 cursor-pointer transition-all duration-200
-          flex flex-col items-center justify-center gap-4 text-center
-          ${dragging
-            ? "border-black bg-gray-50 scale-[1.01]"
-            : "border-gray-300 hover:border-gray-500 hover:bg-gray-50"
+        className="cursor-pointer flex flex-col items-center justify-center text-center transition-all duration-200"
+        style={{
+          width: "100%",
+          height: "280px",
+          borderRadius: "20px",
+          border: dragging
+            ? "1px dashed rgba(255,255,255,0.6)"
+            : "1px dashed rgba(255,255,255,0.2)",
+          background: dragging
+            ? "rgba(255,255,255,0.08)"
+            : "rgba(255,255,255,0.03)",
+          transform: dragging ? "scale(1.01)" : "scale(1)",
+        }}
+        onMouseEnter={(e) => {
+          if (!dragging) {
+            const el = e.currentTarget as HTMLDivElement
+            el.style.background = "rgba(255,255,255,0.06)"
+            el.style.borderColor = "rgba(255,255,255,0.35)"
           }
-        `}
+        }}
+        onMouseLeave={(e) => {
+          if (!dragging) {
+            const el = e.currentTarget as HTMLDivElement
+            el.style.background = "rgba(255,255,255,0.03)"
+            el.style.borderColor = "rgba(255,255,255,0.2)"
+          }
+        }}
       >
-        <div className="w-16 h-16 rounded-full bg-gray-100 flex items-center justify-center">
-          <svg className="w-8 h-8 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5}
-              d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5}
-              d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
+        {/* Upload icon */}
+        <div className="mb-4" style={{ color: "rgba(255,255,255,0.4)" }}>
+          <svg width="40" height="40" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round"
+              d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5" />
           </svg>
         </div>
 
-        <div>
-          <p className="text-xl font-semibold text-gray-800">Drop your outfit here</p>
-          <p className="text-gray-500 mt-1">Upload from Pinterest, Instagram, or your camera roll</p>
-        </div>
-
-        <div className="flex items-center gap-2">
-          <span className="px-3 py-1 bg-black text-white text-sm rounded-full font-medium">
-            Choose Photo
-          </span>
-          <span className="text-gray-400 text-sm">or drag and drop</span>
-        </div>
-
-        <p className="text-xs text-gray-400">JPG, PNG, WEBP · Max 5MB</p>
+        <p
+          className="text-white mb-2"
+          style={{
+            fontFamily: "var(--font-dm-sans)",
+            fontWeight: 500,
+            fontSize: "16px",
+          }}
+        >
+          Drop your outfit here
+        </p>
+        <p
+          style={{
+            fontFamily: "var(--font-dm-sans)",
+            fontWeight: 400,
+            fontSize: "13px",
+            color: "rgba(255,255,255,0.35)",
+          }}
+        >
+          or click to browse · JPG, PNG, WEBP · Max 5MB
+        </p>
       </div>
 
       <input
@@ -103,7 +121,16 @@ export default function ImageUploader({ onImageSelected }: Props) {
       />
 
       {validationError && (
-        <p className="mt-2 text-sm text-red-600 text-center">{validationError}</p>
+        <p
+          className="mt-3 text-center"
+          style={{
+            fontFamily: "var(--font-dm-sans)",
+            fontSize: "13px",
+            color: "rgba(239,68,68,0.9)",
+          }}
+        >
+          {validationError}
+        </p>
       )}
     </div>
   )
