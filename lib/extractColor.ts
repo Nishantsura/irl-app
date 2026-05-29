@@ -46,7 +46,9 @@ export async function extractColorFromImage(imageDataUrl: string): Promise<Color
 
     try {
       const img = new Image()
-      img.crossOrigin = "anonymous"
+      // No crossOrigin needed — this function only receives data: URLs from FileReader,
+      // which are same-origin by definition. Setting crossOrigin on a data URL causes
+      // Chrome to attempt a network GET request and throw ERR_INVALID_URL.
       img.onload = () => {
         try {
           const canvas = document.createElement("canvas")

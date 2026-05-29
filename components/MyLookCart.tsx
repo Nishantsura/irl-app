@@ -1,6 +1,6 @@
 "use client"
 
-import { ClothingItem, Product, SelectedItems } from "@/types"
+import { ClothingItem, Product, SelectedItems, CoherenceScore } from "@/types"
 
 interface Props {
   open: boolean
@@ -9,9 +9,11 @@ interface Props {
   clothingItems: ClothingItem[]
   totalFormatted: string
   onRemove: (itemId: string) => void
+  coherenceScore: CoherenceScore | null
+  isScoringOutfit: boolean
 }
 
-export default function MyLookCart({ open, onClose, selectedItems, clothingItems, totalFormatted, onRemove }: Props) {
+export default function MyLookCart({ open, onClose, selectedItems, clothingItems, totalFormatted, onRemove, coherenceScore, isScoringOutfit }: Props) {
   const selectedCount = Object.keys(selectedItems).length
 
   function getCategoryForId(key: string): string {
@@ -230,6 +232,109 @@ export default function MyLookCart({ open, onClose, selectedItems, clothingItems
             padding: "20px 24px",
             background: "rgba(10,10,10,0.95)",
           }}>
+
+            {/* Coherence Score block — only when 2+ items selected */}
+            {selectedCount >= 2 && (
+              <div style={{ marginBottom: "16px" }}>
+                {isScoringOutfit ? (
+                  /* Loading state — subtle, non-blocking */
+                  <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+                    <div style={{
+                      width: "14px",
+                      height: "14px",
+                      borderRadius: "50%",
+                      border: "1.5px solid rgba(255,255,255,0.1)",
+                      borderTop: "1.5px solid rgba(255,255,255,0.5)",
+                      animation: "spin 0.8s linear infinite",
+                      flexShrink: 0,
+                    }} />
+                    <span style={{
+                      fontFamily: "var(--font-dm-sans)",
+                      fontWeight: 400,
+                      fontSize: "12px",
+                      color: "rgba(255,255,255,0.35)",
+                    }}>
+                      Styling your look...
+                    </span>
+                  </div>
+                ) : coherenceScore ? (
+                  /* Score loaded */
+                  <div>
+                    {/* Top row: score number + style label */}
+                    <div style={{ display: "flex", alignItems: "flex-end", justifyContent: "space-between" }}>
+                      <div style={{ display: "flex", alignItems: "flex-end", gap: "4px" }}>
+                        <span style={{
+                          fontFamily: "var(--font-serif)",
+                          fontSize: "32px",
+                          color: "white",
+                          lineHeight: 1,
+                        }}>
+                          {coherenceScore.score.toFixed(1)}
+                        </span>
+                        <span style={{
+                          fontFamily: "var(--font-dm-sans)",
+                          fontWeight: 300,
+                          fontSize: "14px",
+                          color: "rgba(255,255,255,0.35)",
+                          paddingBottom: "3px",
+                        }}>
+                          /10
+                        </span>
+                      </div>
+                      <span style={{
+                        fontFamily: "var(--font-dm-sans)",
+                        fontWeight: 500,
+                        fontSize: "12px",
+                        color: "white",
+                        letterSpacing: "0.3px",
+                        background: "rgba(255,255,255,0.08)",
+                        border: "1px solid rgba(255,255,255,0.12)",
+                        borderRadius: "999px",
+                        padding: "4px 12px",
+                      }}>
+                        {coherenceScore.style}
+                      </span>
+                    </div>
+
+                    {/* Color story */}
+                    <p style={{
+                      fontFamily: "var(--font-dm-sans)",
+                      fontWeight: 300,
+                      fontSize: "12px",
+                      color: "rgba(255,255,255,0.35)",
+                      fontStyle: "italic",
+                      marginTop: "4px",
+                    }}>
+                      {coherenceScore.colorStory}
+                    </p>
+
+                    {/* Tip */}
+                    <div style={{
+                      borderLeft: "2px solid rgba(255,255,255,0.15)",
+                      paddingLeft: "10px",
+                      marginTop: "12px",
+                    }}>
+                      <p style={{
+                        fontFamily: "var(--font-dm-sans)",
+                        fontWeight: 400,
+                        fontSize: "13px",
+                        color: "rgba(255,255,255,0.55)",
+                        lineHeight: 1.5,
+                      }}>
+                        {coherenceScore.tip}
+                      </p>
+                    </div>
+                  </div>
+                ) : null}
+
+                {/* Divider between score block and total */}
+                {(isScoringOutfit || coherenceScore) && (
+                  <div style={{ height: "1px", background: "rgba(255,255,255,0.06)", margin: "16px 0" }} />
+                )}
+              </div>
+            )}
+
+            {/* Estimated Total */}
             <p style={{
               fontFamily: "var(--font-dm-sans)",
               fontWeight: 400,

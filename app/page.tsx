@@ -1,8 +1,9 @@
 "use client"
 
 import { useState, useEffect, useRef, ChangeEvent, DragEvent } from "react"
-import { ClothingItem, Product, ProductResults, SelectedItems, SearchingState } from "@/types"
+import { ClothingItem, Product, ProductResults, SelectedItems, SearchingState, InferredProfile, CoherenceScore, AnalyzeResponse } from "@/types"
 import { extractColorFromImage, applyColorToDom, resetColorOnDom } from "@/lib/extractColor"
+import { updateProfileOnAnalysis, updateProfileOnSelection, getPersonalizationContext } from "@/lib/styleMemory"
 import OutfitBreakdown from "@/components/OutfitBreakdown"
 import MyLookCart from "@/components/MyLookCart"
 
@@ -22,6 +23,11 @@ export default function Home() {
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [homeDragging, setHomeDragging] = useState(false)
   const [homeHover, setHomeHover] = useState(false)
+
+  // Feature: Style Memory + Coherence Scoring
+  const [inferredProfile, setInferredProfile] = useState<InferredProfile | null>(null)
+  const [coherenceScore, setCoherenceScore] = useState<CoherenceScore | null>(null)
+  const [isScoringOutfit, setIsScoringOutfit] = useState(false)
 
   const selectedCount = Object.keys(selectedItems).length
   const totalPrice = Object.values(selectedItems).reduce((sum, p) => sum + p.price, 0)
@@ -65,6 +71,8 @@ export default function Home() {
     setProductResults({})
     setSelectedItems({})
     setSearchingItems({})
+    setInferredProfile(null)
+    setCoherenceScore(null)
 
     const reader = new FileReader()
     reader.onload = async (e) => {
@@ -80,10 +88,25 @@ export default function Home() {
     try {
       const formData = new FormData()
       formData.append("image", file)
+
+      // Inject personalization context if user has crossed threshold (invisible to user)
+      const personalizationContext = getPersonalizationContext()
+      if (personalizationContext) {
+        formData.append("personalizationContext", personalizationContext)
+      }
+
       const res = await fetch("/api/analyze", { method: "POST", body: formData })
-      const data = await res.json()
-      if (data.error) { setError(data.error); return }
+      const data: AnalyzeResponse = await res.json()
+
+      if (!data.items) { setError((data as { error?: string }).error || "Analysis failed. Please try again."); return }
+
       setClothingItems(data.items)
+
+      if (data.inferredProfile) {
+        setInferredProfile(data.inferredProfile)
+        updateProfileOnAnalysis(data.inferredProfile) // silent — no UI feedback
+      }
+
       data.items.forEach((item: ClothingItem) => searchForItem(item))
     } catch {
       setError("Something went wrong. Please try again.")
@@ -126,13 +149,62 @@ export default function Home() {
     // Key is composite so multiple products from the same category can be selected
     const key = `${itemId}__${product.link}`
     setSelectedItems((prev) => {
+      let updated: SelectedItems
+
       if (prev[key]) {
-        const updated = { ...prev }
+        // Deselect
+        updated = { ...prev }
         delete updated[key]
-        return updated
+      } else {
+        // Select — silently update Style Memory
+        updateProfileOnSelection(product)
+        updated = { ...prev, [key]: product }
       }
-      return { ...prev, [key]: product }
+
+      // Trigger coherence scoring whenever selection changes and 2+ items present
+      const count = Object.keys(updated).length
+      if (count >= 2 && inferredProfile) {
+        scoreOutfit(updated, inferredProfile)
+      } else {
+        setCoherenceScore(null)
+      }
+
+      return updated
     })
+  }
+
+  async function scoreOutfit(currentSelected: SelectedItems, profile: InferredProfile) {
+    setIsScoringOutfit(true)
+    try {
+      const items = Object.entries(currentSelected).map(([key, product]) => {
+        // Key is composite: "${itemId}__${productLink}" — extract real itemId
+        const itemId = key.split("__")[0]
+        const clothingItem = clothingItems.find((c) => c.id === itemId)
+        return {
+          category: clothingItem?.category || "item",
+          title: product.title,
+          brand: product.brand,
+          price: product.priceFormatted,
+          source: product.source,
+        }
+      })
+
+      const res = await fetch("/api/score", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ items, inferredProfile: profile }),
+      })
+
+      const score: CoherenceScore & { error?: string } = await res.json()
+      if (!score.error) {
+        setCoherenceScore(score)
+      }
+    } catch {
+      // Fail silently — coherence scoring is enhancement, not core feature
+      setCoherenceScore(null)
+    } finally {
+      setIsScoringOutfit(false)
+    }
   }
 
   function handleRemoveFromLook(itemId: string) {
@@ -153,6 +225,8 @@ export default function Home() {
     setSearchingItems({})
     setCartOpen(false)
     setError(null)
+    setInferredProfile(null)
+    setCoherenceScore(null)
     resetColorOnDom()
   }
 
@@ -508,6 +582,8 @@ export default function Home() {
         clothingItems={clothingItems}
         totalFormatted={totalFormatted}
         onRemove={handleRemoveFromLook}
+        coherenceScore={coherenceScore}
+        isScoringOutfit={isScoringOutfit}
       />
     </div>
   )
