@@ -35,12 +35,10 @@ export default function Home() {
   const isHome = !uploadedImage && !isAnalyzing
 
   useEffect(() => {
-    const onScroll = () => setScrolled(window.scrollY > 80)
+    const onScroll = () => setScrolled(window.scrollY > 60)
     window.addEventListener("scroll", onScroll, { passive: true })
     return () => window.removeEventListener("scroll", onScroll)
   }, [])
-
-  // No separate useEffect needed — play() is called in the ref callback below
 
   const dynamicBgStyle = hasImage
     ? {
@@ -91,7 +89,6 @@ export default function Home() {
       const formData = new FormData()
       formData.append("image", file)
 
-      // Inject personalization context if user has crossed threshold (invisible to user)
       const personalizationContext = getPersonalizationContext()
       if (personalizationContext) {
         formData.append("personalizationContext", personalizationContext)
@@ -106,7 +103,7 @@ export default function Home() {
 
       if (data.inferredProfile) {
         setInferredProfile(data.inferredProfile)
-        updateProfileOnAnalysis(data.inferredProfile) // silent — no UI feedback
+        updateProfileOnAnalysis(data.inferredProfile)
       }
 
       data.items.forEach((item: ClothingItem) => searchForItem(item))
@@ -117,7 +114,6 @@ export default function Home() {
     }
   }
 
-  // Home screen file handlers
   function validateAndUpload(file: File) {
     const validTypes = ["image/jpeg", "image/png", "image/webp"]
     if (!validTypes.includes(file.type) || file.size > 5 * 1024 * 1024) return
@@ -148,22 +144,18 @@ export default function Home() {
   }
 
   function handleAddToLook(itemId: string, product: Product) {
-    // Key is composite so multiple products from the same category can be selected
     const key = `${itemId}__${product.link}`
     setSelectedItems((prev) => {
       let updated: SelectedItems
 
       if (prev[key]) {
-        // Deselect
         updated = { ...prev }
         delete updated[key]
       } else {
-        // Select — silently update Style Memory
         updateProfileOnSelection(product)
         updated = { ...prev, [key]: product }
       }
 
-      // Trigger coherence scoring whenever selection changes and 2+ items present
       const count = Object.keys(updated).length
       if (count >= 2 && inferredProfile) {
         scoreOutfit(updated, inferredProfile)
@@ -179,7 +171,6 @@ export default function Home() {
     setIsScoringOutfit(true)
     try {
       const items = Object.entries(currentSelected).map(([key, product]) => {
-        // Key is composite: "${itemId}__${productLink}" — extract real itemId
         const itemId = key.split("__")[0]
         const clothingItem = clothingItems.find((c) => c.id === itemId)
         return {
@@ -202,7 +193,6 @@ export default function Home() {
         setCoherenceScore(score)
       }
     } catch {
-      // Fail silently — coherence scoring is enhancement, not core feature
       setCoherenceScore(null)
     } finally {
       setIsScoringOutfit(false)
@@ -235,7 +225,7 @@ export default function Home() {
   return (
     <div className="min-h-screen" style={{ backgroundColor: "#0a0a0a" }}>
 
-      {/* ── Navbar (hidden on home — wordmark takes its place) ── */}
+      {/* ── Navbar ── */}
       {!isHome && (
         <nav
           className="fixed top-0 left-0 right-0 z-50 transition-all duration-300"
@@ -245,7 +235,8 @@ export default function Home() {
             borderBottom: scrolled ? "1px solid rgba(255,255,255,0.06)" : "none",
           }}
         >
-          <div style={{ maxWidth: "1152px", margin: "0 auto", padding: "0 32px", height: "64px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+          <div className="flex items-center justify-between px-4 md:px-8 lg:px-12"
+            style={{ height: "56px", maxWidth: "1280px", margin: "0 auto" }}>
             <button
               onClick={handleReset}
               style={{
@@ -253,10 +244,11 @@ export default function Home() {
                 border: "none",
                 cursor: "pointer",
                 fontFamily: "var(--font-serif)",
-                fontSize: "28px",
+                fontSize: "22px",
                 color: "white",
                 letterSpacing: "-0.5px",
                 padding: 0,
+                WebkitTapHighlightColor: "transparent",
               }}
             >
               IRL
@@ -265,14 +257,18 @@ export default function Home() {
             {selectedCount > 0 && (
               <button
                 onClick={() => setCartOpen(true)}
-                className="flex items-center gap-2 px-5 py-2 rounded-full text-white text-sm transition-all duration-150 hover:bg-white/10"
+                className="flex items-center gap-1.5 rounded-full text-white transition-all duration-150"
                 style={{
                   border: "1px solid rgba(255,255,255,0.2)",
                   fontFamily: "var(--font-dm-sans)",
                   fontWeight: 500,
+                  fontSize: "12px",
+                  padding: "6px 12px",
+                  WebkitTapHighlightColor: "transparent",
+                  minHeight: "36px",
                 }}
               >
-                My Look · {selectedCount}
+                Look ({selectedCount})
               </button>
             )}
           </div>
@@ -297,18 +293,16 @@ export default function Home() {
             background: "#0a0a0a",
             boxShadow: homeDragging ? "inset 0 0 80px rgba(255,255,255,0.08)" : "none",
             transition: "box-shadow 0.3s ease",
+            WebkitTapHighlightColor: "transparent",
           }}
         >
-          {/* Background video — ref callback sets muted + calls play() synchronously
-               the instant the element hits the DOM, before iOS can block autoplay.
-               React's muted prop doesn't write the HTML attribute (known bug),
-               so defaultMuted=true via JS is the only reliable iOS fix. */}
+          {/* Background video */}
           <video
             ref={(el) => {
               if (!el) return
-              el.defaultMuted = true  // writes the muted HTML attribute iOS checks
-              el.muted = true         // sets the JS property
-              el.play().catch(() => {}) // trigger play — iOS allows muted+playsInline
+              el.defaultMuted = true
+              el.muted = true
+              el.play().catch(() => {})
             }}
             autoPlay
             loop
@@ -327,14 +321,12 @@ export default function Home() {
             <source src="/home-bg.mp4" type="video/mp4" />
           </video>
 
-          {/* Dark overlay — pointerEvents none so drag events reach the parent */}
+          {/* Dark overlay */}
           <div
             style={{
               position: "absolute",
               inset: 0,
-              background: homeHover
-                ? "rgba(0,0,0,0.55)"
-                : "rgba(0,0,0,0.65)",
+              background: homeHover ? "rgba(0,0,0,0.55)" : "rgba(0,0,0,0.65)",
               transition: "background 0.4s ease",
               zIndex: 1,
               pointerEvents: "none",
@@ -345,11 +337,11 @@ export default function Home() {
           <div
             style={{
               position: "fixed",
-              top: "24px",
-              left: "24px",
+              top: "16px",
+              left: "16px",
               zIndex: 22,
               fontFamily: "var(--font-serif)",
-              fontSize: "16px",
+              fontSize: "14px",
               color: "white",
               letterSpacing: "-0.3px",
               fontWeight: 400,
@@ -359,14 +351,14 @@ export default function Home() {
             InRealLife
           </div>
 
-          {/* Giant background text */}
+          {/* Giant background text — mobile-first font size */}
           <div
             style={{
               position: "absolute",
               top: "50%",
               left: "50%",
               fontFamily: "var(--font-serif)",
-              fontSize: "clamp(120px, 22vw, 280px)",
+              fontSize: "clamp(80px, 20vw, 280px)",
               color: "rgba(255,255,255,0.07)",
               whiteSpace: "nowrap",
               lineHeight: 1,
@@ -380,7 +372,7 @@ export default function Home() {
             InRealLife
           </div>
 
-          {/* Crosshair + label — slightly below center */}
+          {/* Crosshair + label */}
           <div
             style={{
               position: "absolute",
@@ -395,31 +387,22 @@ export default function Home() {
             }}
           >
             <div style={{ animation: "pulse-crosshair 3s ease-in-out infinite" }}>
-              <svg width="72" height="72" viewBox="0 0 72 72" fill="none">
-                <line
-                  x1="36" y1="0" x2="36" y2="72"
-                  stroke="white"
-                  strokeWidth="1"
-                  strokeOpacity={homeHover ? "1" : "0.9"}
-                  style={{ transition: "stroke-opacity 0.3s ease" }}
-                />
-                <line
-                  x1="0" y1="36" x2="72" y2="36"
-                  stroke="white"
-                  strokeWidth="1"
-                  strokeOpacity={homeHover ? "1" : "0.9"}
-                  style={{ transition: "stroke-opacity 0.3s ease" }}
-                />
+              {/* Responsive crosshair via CSS class */}
+              <svg className="w-[52px] h-[52px] md:w-[64px] md:h-[64px] lg:w-[72px] lg:h-[72px]" viewBox="0 0 72 72" fill="none">
+                <line x1="36" y1="0" x2="36" y2="72" stroke="white" strokeWidth="1"
+                  strokeOpacity={homeHover ? "1" : "0.9"} style={{ transition: "stroke-opacity 0.3s ease" }} />
+                <line x1="0" y1="36" x2="72" y2="36" stroke="white" strokeWidth="1"
+                  strokeOpacity={homeHover ? "1" : "0.9"} style={{ transition: "stroke-opacity 0.3s ease" }} />
                 <circle cx="36" cy="36" r="3" fill="white" fillOpacity="0.9" />
               </svg>
             </div>
 
             <p
+              className="text-xs md:text-sm"
               style={{
-                marginTop: "20px",
+                marginTop: "14px",
                 fontFamily: "var(--font-dm-sans)",
                 fontWeight: 300,
-                fontSize: "14px",
                 color: homeHover ? "rgba(255,255,255,0.7)" : "rgba(255,255,255,0.4)",
                 letterSpacing: "0.5px",
                 textAlign: "center",
@@ -430,7 +413,6 @@ export default function Home() {
             </p>
           </div>
 
-          {/* Hidden file input */}
           <input
             ref={fileInputRef}
             type="file"
@@ -445,14 +427,12 @@ export default function Home() {
       {/* ── STATE B: Analyzing ── */}
       {isAnalyzing && (
         <div
-          className="fixed inset-0 z-40 flex flex-col items-center justify-center gap-6"
+          className="fixed inset-0 z-40 flex flex-col items-center justify-center gap-6 px-6"
           style={{ backgroundColor: "rgba(10,10,10,0.6)" }}
         >
           <div
-            className="animate-spin-custom"
+            className="animate-spin-custom w-10 h-10 md:w-12 md:h-12"
             style={{
-              width: 48,
-              height: 48,
               borderRadius: "50%",
               border: "2px solid rgba(255,255,255,0.1)",
               borderTop: "2px solid white",
@@ -460,14 +440,14 @@ export default function Home() {
           />
           <div className="text-center">
             <p
-              className="text-white"
-              style={{ fontFamily: "var(--font-serif)", fontSize: "28px", letterSpacing: "-0.5px" }}
+              className="text-white text-2xl md:text-3xl"
+              style={{ fontFamily: "var(--font-serif)", letterSpacing: "-0.5px" }}
             >
               Analyzing your outfit
             </p>
             <p
-              className="text-white/50 mt-2"
-              style={{ fontFamily: "var(--font-dm-sans)", fontWeight: 300, fontSize: "15px" }}
+              className="text-white/50 mt-2 text-sm md:text-base"
+              style={{ fontFamily: "var(--font-dm-sans)", fontWeight: 300 }}
             >
               Identifying every piece...
             </p>
@@ -481,14 +461,12 @@ export default function Home() {
 
           {/* Error */}
           {error && (
-            <div style={{ maxWidth: "1152px", margin: "0 auto", padding: "96px 32px 0" }}>
+            <div className="px-4 md:px-8 pt-16 md:pt-20" style={{ maxWidth: "1280px", margin: "0 auto" }}>
               <div
-                className="flex items-center justify-between rounded-xl px-5 py-4"
+                className="flex items-center justify-between rounded-xl px-4 md:px-5 py-3 md:py-4"
                 style={{ background: "rgba(239,68,68,0.1)", border: "1px solid rgba(239,68,68,0.2)" }}
               >
-                <p className="text-red-400 text-sm" style={{ fontFamily: "var(--font-dm-sans)" }}>
-                  {error}
-                </p>
+                <p className="text-red-400 text-sm" style={{ fontFamily: "var(--font-dm-sans)" }}>{error}</p>
                 <button
                   onClick={handleReset}
                   className="text-red-400 hover:text-red-300 transition-colors text-sm underline ml-4"
@@ -502,58 +480,51 @@ export default function Home() {
 
           {/* STATE C: Results */}
           {uploadedImage && !isAnalyzing && clothingItems.length > 0 && (
-            <div style={{ maxWidth: "1152px", margin: "0 auto", padding: "96px 32px 80px" }}>
-              <div style={{ display: "flex", flexDirection: "row", gap: "56px", alignItems: "flex-start" }}>
+            <div
+              className="px-4 md:px-6 lg:px-8 xl:px-12 pt-16 md:pt-20 pb-8 md:pb-10 lg:pb-12 xl:pb-16"
+              style={{ maxWidth: "1280px", margin: "0 auto" }}
+            >
+              {/* Two-column on lg+, single column below */}
+              <div className="flex flex-col lg:flex-row lg:gap-0 lg:items-start">
 
-                {/* Left column — sticky image panel */}
-                <div style={{ width: "380px", flexShrink: 0, position: "sticky", top: "88px", alignSelf: "flex-start" }}>
-                  {/* Image container — object-contain so nothing is cropped */}
+                {/* Left column — full width mobile, sticky 36% on lg+ */}
+                <div className="w-full lg:w-[36%] xl:w-[38%] lg:sticky lg:top-[72px] lg:self-start lg:pr-8 xl:pr-12 mb-6 md:mb-8 lg:mb-0">
+
+                  {/* Image */}
                   <div
-                    style={{
-                      borderRadius: "16px",
-                      overflow: "hidden",
-                      background: "#111",
-                      boxShadow: "0 24px 56px rgba(0,0,0,0.6)",
-                    }}
+                    className="rounded-xl md:rounded-[14px] lg:rounded-2xl overflow-hidden"
+                    style={{ background: "#111", boxShadow: "0 24px 56px rgba(0,0,0,0.6)" }}
                   >
                     <img
                       src={uploadedImage}
                       alt="Your outfit"
-                      style={{
-                        width: "100%",
-                        height: "auto",
-                        maxHeight: "560px",
-                        objectFit: "contain",
-                        display: "block",
-                      }}
+                      className="w-full block object-contain"
+                      style={{ maxHeight: "60vw", height: "auto" }}
                     />
                   </div>
 
-                  {/* Meta row below image */}
-                  <div style={{ marginTop: "16px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                  {/* Meta row */}
+                  <div className="flex items-center justify-between mt-3 md:mt-4">
                     <span
+                      className="inline-flex items-center rounded-full uppercase"
                       style={{
-                        display: "inline-flex",
-                        alignItems: "center",
-                        borderRadius: "999px",
-                        padding: "6px 14px",
+                        padding: "5px 12px",
                         border: "1px solid rgba(255,255,255,0.12)",
                         fontFamily: "var(--font-dm-sans)",
                         fontWeight: 500,
-                        fontSize: "11px",
+                        fontSize: "10px",
                         color: "rgba(255,255,255,0.5)",
                         letterSpacing: "0.8px",
-                        textTransform: "uppercase",
                       }}
                     >
                       {clothingItems.length} items found
                     </span>
                     <button
                       onClick={handleReset}
+                      className="text-xs md:text-sm"
                       style={{
                         fontFamily: "var(--font-dm-sans)",
                         fontWeight: 400,
-                        fontSize: "13px",
                         color: "rgba(255,255,255,0.3)",
                         textDecoration: "underline",
                         textUnderlineOffset: "3px",
@@ -562,6 +533,10 @@ export default function Home() {
                         cursor: "pointer",
                         padding: 0,
                         transition: "color 0.15s ease",
+                        WebkitTapHighlightColor: "transparent",
+                        minHeight: "44px",
+                        display: "flex",
+                        alignItems: "center",
                       }}
                       onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.color = "rgba(255,255,255,0.65)" }}
                       onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.color = "rgba(255,255,255,0.3)" }}
@@ -571,8 +546,8 @@ export default function Home() {
                   </div>
                 </div>
 
-                {/* Right column — outfit breakdown, fills remaining width */}
-                <div style={{ flex: 1, minWidth: 0 }}>
+                {/* Right column */}
+                <div className="w-full lg:w-[64%] xl:w-[62%] lg:pt-1">
                   <OutfitBreakdown
                     clothingItems={clothingItems}
                     productResults={productResults}
@@ -581,35 +556,63 @@ export default function Home() {
                     onAddToLook={handleAddToLook}
                   />
 
+                  {/* "View My Look" — fixed bottom bar on mobile/iPad, sticky inline on lg+ */}
                   {selectedCount > 0 && (
-                    <div style={{ position: "sticky", bottom: "16px", marginTop: "32px" }}>
-                      <button
-                        onClick={() => setCartOpen(true)}
+                    <>
+                      {/* Mobile + iPad: fixed bottom bar */}
+                      <div
+                        className="fixed bottom-0 left-0 right-0 lg:hidden z-50 px-4 py-3"
                         style={{
-                          width: "100%",
-                          height: "56px",
-                          borderRadius: "14px",
-                          background: "rgba(255,255,255,0.1)",
-                          border: "1px solid rgba(255,255,255,0.18)",
+                          background: "rgba(10,10,10,0.95)",
                           backdropFilter: "blur(16px)",
-                          fontFamily: "var(--font-dm-sans)",
-                          fontWeight: 500,
-                          fontSize: "15px",
-                          color: "white",
-                          cursor: "pointer",
-                          transition: "background 0.15s ease",
-                          display: "flex",
-                          alignItems: "center",
-                          justifyContent: "center",
-                          gap: "8px",
+                          borderTop: "1px solid rgba(255,255,255,0.08)",
                         }}
-                        onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.background = "rgba(255,255,255,0.16)" }}
-                        onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.background = "rgba(255,255,255,0.1)" }}
                       >
-                        View My Look · {selectedCount} {selectedCount === 1 ? "item" : "items"}
-                      </button>
-                    </div>
+                        <button
+                          onClick={() => setCartOpen(true)}
+                          className="w-full flex items-center justify-center gap-2 text-white text-sm"
+                          style={{
+                            height: "48px",
+                            borderRadius: "12px",
+                            background: "rgba(255,255,255,0.1)",
+                            border: "1px solid rgba(255,255,255,0.18)",
+                            fontFamily: "var(--font-dm-sans)",
+                            fontWeight: 500,
+                            cursor: "pointer",
+                            WebkitTapHighlightColor: "transparent",
+                          }}
+                        >
+                          View My Look · {selectedCount} {selectedCount === 1 ? "item" : "items"}
+                        </button>
+                      </div>
+
+                      {/* lg+: inline sticky button */}
+                      <div className="hidden lg:block sticky bottom-4 mt-6">
+                        <button
+                          onClick={() => setCartOpen(true)}
+                          className="w-full flex items-center justify-center gap-2 text-white transition-all duration-200"
+                          style={{
+                            height: "52px",
+                            borderRadius: "14px",
+                            background: "rgba(255,255,255,0.1)",
+                            border: "1px solid rgba(255,255,255,0.18)",
+                            backdropFilter: "blur(16px)",
+                            fontFamily: "var(--font-dm-sans)",
+                            fontWeight: 500,
+                            fontSize: "15px",
+                            cursor: "pointer",
+                          }}
+                          onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.background = "rgba(255,255,255,0.16)" }}
+                          onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.background = "rgba(255,255,255,0.1)" }}
+                        >
+                          View My Look · {selectedCount} {selectedCount === 1 ? "item" : "items"}
+                        </button>
+                      </div>
+                    </>
                   )}
+
+                  {/* Spacer so fixed bar doesn't overlap last card on mobile */}
+                  {selectedCount > 0 && <div className="h-20 lg:hidden" />}
                 </div>
               </div>
             </div>

@@ -41,12 +41,12 @@ export default function MyLookCart({ open, onClose, selectedItems, clothingItems
 
       {/* Cart panel */}
       <div
+        className="w-full md:w-[380px] lg:w-[400px]"
         style={{
           position: "fixed",
           top: 0,
           right: 0,
           height: "100%",
-          width: "min(400px, 100vw)",
           zIndex: 100,
           display: "flex",
           flexDirection: "column",
@@ -58,14 +58,16 @@ export default function MyLookCart({ open, onClose, selectedItems, clothingItems
         }}
       >
         {/* Header */}
-        <div style={{ padding: "24px 24px 0" }}>
+        <div className="px-4 pt-5 md:px-6 md:pt-6">
           <div className="flex items-center justify-between">
-            <h2 style={{
-              fontFamily: "var(--font-serif)",
-              fontSize: "28px",
-              color: "white",
-              letterSpacing: "-0.5px",
-            }}>
+            <h2
+              className="text-2xl md:text-[28px]"
+              style={{
+                fontFamily: "var(--font-serif)",
+                color: "white",
+                letterSpacing: "-0.5px",
+              }}
+            >
               My Look
             </h2>
             <button
@@ -90,7 +92,7 @@ export default function MyLookCart({ open, onClose, selectedItems, clothingItems
         </div>
 
         {/* Items list */}
-        <div style={{ flex: 1, overflowY: "auto", padding: "0 24px" }}>
+        <div className="flex-1 overflow-y-auto px-4 md:px-6">
           {selectedCount === 0 ? (
             <div className="flex flex-col items-center justify-center h-full gap-3 text-center">
               <svg width="40" height="40" fill="none" stroke="rgba(255,255,255,0.15)" strokeWidth="1.5" viewBox="0 0 24 24">
@@ -114,14 +116,14 @@ export default function MyLookCart({ open, onClose, selectedItems, clothingItems
                   <div>
                     {/* Row: thumb + info + remove */}
                     <div className="flex gap-3 items-start">
-                      <div style={{
-                        width: "64px",
-                        height: "64px",
-                        flexShrink: 0,
-                        borderRadius: "8px",
-                        overflow: "hidden",
-                        background: "#1e1e1e",
-                      }}>
+                      <div
+                        className="w-14 h-14 md:w-16 md:h-16 flex-shrink-0"
+                        style={{
+                          borderRadius: "8px",
+                          overflow: "hidden",
+                          background: "#1e1e1e",
+                        }}
+                      >
                         {product.imageUrl ? (
                           <img
                             src={product.imageUrl}
@@ -197,21 +199,17 @@ export default function MyLookCart({ open, onClose, selectedItems, clothingItems
                       href={product.link}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="flex items-center justify-center transition-all duration-150 hover:bg-white/10"
+                      className="flex items-center justify-center h-9 md:h-10 text-xs md:text-[13px]"
                       style={{
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "center",
-                        height: "40px",
                         marginTop: "10px",
                         borderRadius: "8px",
                         border: "1px solid rgba(255,255,255,0.15)",
                         background: "transparent",
                         fontFamily: "var(--font-dm-sans)",
                         fontWeight: 500,
-                        fontSize: "13px",
                         color: "white",
                         textDecoration: "none",
+                        transition: "background 0.15s ease",
                       }}
                       onMouseEnter={(e) => { (e.currentTarget as HTMLAnchorElement).style.background = "rgba(255,255,255,0.08)" }}
                       onMouseLeave={(e) => { (e.currentTarget as HTMLAnchorElement).style.background = "transparent" }}
@@ -227,12 +225,13 @@ export default function MyLookCart({ open, onClose, selectedItems, clothingItems
 
         {/* Footer */}
         {selectedCount > 0 && (
-          <div style={{
-            borderTop: "1px solid rgba(255,255,255,0.08)",
-            padding: "20px 24px",
-            background: "rgba(10,10,10,0.95)",
-          }}>
-
+          <div
+            className="px-4 py-4 md:px-6 md:py-5"
+            style={{
+              borderTop: "1px solid rgba(255,255,255,0.08)",
+              background: "rgba(10,10,10,0.95)",
+            }}
+          >
             {/* Coherence Score block — only when 2+ items selected */}
             {selectedCount >= 2 && (
               <div style={{ marginBottom: "16px" }}>
@@ -263,12 +262,14 @@ export default function MyLookCart({ open, onClose, selectedItems, clothingItems
                     {/* Top row: score number + style label */}
                     <div style={{ display: "flex", alignItems: "flex-end", justifyContent: "space-between" }}>
                       <div style={{ display: "flex", alignItems: "flex-end", gap: "4px" }}>
-                        <span style={{
-                          fontFamily: "var(--font-serif)",
-                          fontSize: "32px",
-                          color: "white",
-                          lineHeight: 1,
-                        }}>
+                        <span
+                          className="text-3xl md:text-[32px]"
+                          style={{
+                            fontFamily: "var(--font-serif)",
+                            color: "white",
+                            lineHeight: 1,
+                          }}
+                        >
                           {coherenceScore.score.toFixed(1)}
                         </span>
                         <span style={{
@@ -346,13 +347,15 @@ export default function MyLookCart({ open, onClose, selectedItems, clothingItems
             }}>
               Estimated Total
             </p>
-            <p style={{
-              fontFamily: "var(--font-serif)",
-              fontSize: "36px",
-              color: "white",
-              letterSpacing: "-1px",
-              lineHeight: 1.1,
-            }}>
+            <p
+              className="text-3xl md:text-4xl"
+              style={{
+                fontFamily: "var(--font-serif)",
+                color: "white",
+                letterSpacing: "-1px",
+                lineHeight: 1.1,
+              }}
+            >
               {totalFormatted}
             </p>
             <p style={{

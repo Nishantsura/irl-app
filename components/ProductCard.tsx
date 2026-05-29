@@ -16,7 +16,7 @@ function StarRating({ rating }: { rating: number }) {
       {[1, 2, 3, 4, 5].map((star) => (
         <svg
           key={star}
-          width="11" height="11"
+          width="10" height="10"
           fill={star <= Math.round(rating) ? "#fbbf24" : "rgba(255,255,255,0.15)"}
           viewBox="0 0 20 20"
         >
@@ -32,10 +32,8 @@ export default function ProductCard({ product, isSelected, onAdd, animationDelay
 
   return (
     <div
-      className="card-enter flex-shrink-0 cursor-pointer"
+      className="card-enter cursor-pointer min-w-[148px] w-[148px] md:min-w-[160px] md:w-[160px] lg:min-w-[180px] lg:w-[180px] flex-shrink-0 rounded-xl md:rounded-[14px]"
       style={{
-        width: "180px",
-        borderRadius: "14px",
         border: isSelected
           ? "1px solid rgba(255,255,255,0.7)"
           : "1px solid rgba(255,255,255,0.08)",
@@ -65,7 +63,10 @@ export default function ProductCard({ product, isSelected, onAdd, animationDelay
       }}
     >
       {/* Image */}
-      <div style={{ width: "100%", height: "180px", background: "#1e1e1e", borderBottom: "1px solid rgba(255,255,255,0.06)" }}>
+      <div
+        className="w-full h-[148px] md:h-[160px] lg:h-[180px]"
+        style={{ background: "#1e1e1e", borderBottom: "1px solid rgba(255,255,255,0.06)" }}
+      >
         {!imgError && product.imageUrl ? (
           <img
             src={product.imageUrl}
@@ -84,41 +85,45 @@ export default function ProductCard({ product, isSelected, onAdd, animationDelay
       </div>
 
       {/* Body */}
-      <div style={{ padding: "12px" }}>
-        <p style={{
-          fontFamily: "var(--font-dm-sans)",
-          fontWeight: 600,
-          fontSize: "10px",
-          color: "rgba(255,255,255,0.4)",
-          letterSpacing: "1.5px",
-          textTransform: "uppercase",
-          marginBottom: "4px",
-          overflow: "hidden",
-          textOverflow: "ellipsis",
-          whiteSpace: "nowrap",
-        }}>
+      <div className="p-2.5 md:p-3">
+        <p
+          className="text-[9px] md:text-[10px]"
+          style={{
+            fontFamily: "var(--font-dm-sans)",
+            fontWeight: 600,
+            color: "rgba(255,255,255,0.4)",
+            letterSpacing: "1.5px",
+            textTransform: "uppercase",
+            marginBottom: "4px",
+            overflow: "hidden",
+            textOverflow: "ellipsis",
+            whiteSpace: "nowrap",
+          }}
+        >
           {product.brand}
         </p>
 
-        <p style={{
-          fontFamily: "var(--font-dm-sans)",
-          fontWeight: 600,
-          fontSize: "18px",
-          color: "white",
-          marginBottom: "6px",
-          lineHeight: 1.1,
-        }}>
+        <p
+          className="text-base md:text-lg"
+          style={{
+            fontFamily: "var(--font-dm-sans)",
+            fontWeight: 600,
+            color: "white",
+            marginBottom: "6px",
+            lineHeight: 1.1,
+          }}
+        >
           {product.priceFormatted}
         </p>
 
-        <div style={{ marginBottom: "10px" }}>
+        <div style={{ marginBottom: "8px" }}>
           {product.rating > 0 ? (
-            <div className="flex items-center gap-1.5">
+            <div className="flex items-center gap-1">
               <StarRating rating={product.rating} />
               <span style={{
                 fontFamily: "var(--font-dm-sans)",
                 fontWeight: 400,
-                fontSize: "12px",
+                fontSize: "11px",
                 color: "rgba(255,255,255,0.5)",
               }}>
                 {product.rating.toFixed(1)}
@@ -131,7 +136,7 @@ export default function ProductCard({ product, isSelected, onAdd, animationDelay
             <span style={{
               fontFamily: "var(--font-dm-sans)",
               fontWeight: 400,
-              fontSize: "12px",
+              fontSize: "11px",
               color: "rgba(255,255,255,0.25)",
             }}>
               No ratings
@@ -139,16 +144,13 @@ export default function ProductCard({ product, isSelected, onAdd, animationDelay
           )}
         </div>
 
-        {/* Action row: Add to Look + View product */}
+        {/* Add to Look button */}
         <button
           onClick={onAdd}
-          className="w-full transition-all duration-150"
+          className="w-full transition-all duration-150 h-8 text-xs rounded-md md:h-9 md:text-[13px] md:rounded-lg"
           style={{
-            height: "36px",
-            borderRadius: "8px",
             fontFamily: "var(--font-dm-sans)",
             fontWeight: 500,
-            fontSize: "13px",
             cursor: "pointer",
             background: isSelected ? "white" : "rgba(255,255,255,0.1)",
             color: isSelected ? "#0a0a0a" : "white",
@@ -174,11 +176,11 @@ export default function ProductCard({ product, isSelected, onAdd, animationDelay
           onClick={(e) => e.stopPropagation()}
           style={{
             display: "block",
-            marginTop: "8px",
+            marginTop: "7px",
             textAlign: "center",
             fontFamily: "var(--font-dm-sans)",
             fontWeight: 400,
-            fontSize: "12px",
+            fontSize: "11px",
             color: "rgba(255,255,255,0.3)",
             textDecoration: "none",
             transition: "color 0.15s ease",
