@@ -92,3 +92,28 @@ export interface AnalyzeResponse {
   items: ClothingItem[]
   inferredProfile: InferredProfile
 }
+
+// ── Feature: Save System ──────────────────────────────────────────────────────
+
+export interface SavedProduct {
+  id: string                    // unique: `${product.link}_${Date.now()}`
+  product: Product              // full Product object
+  category: string              // clothing category (jacket, top, etc.)
+  outfitContext: string         // brief description from ClothingItem
+  savedAt: string               // ISO date string
+}
+
+export interface SavedLook {
+  id: string                    // unique: `look_${Date.now()}`
+  outfitImageCompressed: string // base64 compressed outfit photo (max 400px wide)
+  selectedProducts: Array<{
+    category: string
+    description: string
+    product: Product
+  }>
+  totalPrice: number
+  totalFormatted: string        // "₹3,987"
+  coherenceScore: CoherenceScore | null
+  itemCount: number
+  savedAt: string               // ISO date string
+}

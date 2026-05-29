@@ -97,6 +97,8 @@ export default function OutfitBreakdown({ clothingItems, productResults, searchi
                     isSelected={!!selectedItems[`${item.id}__${product.link}`]}
                     onAdd={() => onAddToLook(item.id, product)}
                     animationDelay={cardIndex * 0.06}
+                    clothingCategory={item.category}
+                    clothingDescription={item.description}
                   />
                 ))
               ) : (

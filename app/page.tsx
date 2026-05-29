@@ -1,9 +1,12 @@
 "use client"
 
 import { useState, useEffect, useRef, ChangeEvent, DragEvent } from "react"
+import Link from "next/link"
 import { ClothingItem, Product, ProductResults, SelectedItems, SearchingState, InferredProfile, CoherenceScore, AnalyzeResponse } from "@/types"
 import { extractColorFromImage, applyColorToDom, resetColorOnDom } from "@/lib/extractColor"
 import { updateProfileOnAnalysis, updateProfileOnSelection, getPersonalizationContext } from "@/lib/styleMemory"
+import { getSaveCounts } from "@/lib/savedItems"
+import { hashImage, getCachedAnalysis, setCachedAnalysis } from "@/lib/analysisCache"
 import OutfitBreakdown from "@/components/OutfitBreakdown"
 import MyLookCart from "@/components/MyLookCart"
 
@@ -29,6 +32,21 @@ export default function Home() {
   const [coherenceScore, setCoherenceScore] = useState<CoherenceScore | null>(null)
   const [isScoringOutfit, setIsScoringOutfit] = useState(false)
 
+  // Feature: Previous Look — one-level back navigation within the session
+  const [currentHash, setCurrentHash] = useState<string | null>(null)
+  const [previousHash, setPreviousHash] = useState<string | null>(null)
+  const [previousImage, setPreviousImage] = useState<string | null>(null)
+
+  // Feature: Save system — badge count in navbar
+  const [savedCount, setSavedCount] = useState(0)
+
+  function refreshSavedCount() {
+    try {
+      const { products, looks } = getSaveCounts()
+      setSavedCount(products + looks)
+    } catch { /* ignore */ }
+  }
+
   const selectedCount = Object.keys(selectedItems).length
   const totalPrice = Object.values(selectedItems).reduce((sum, p) => sum + p.price, 0)
   const totalFormatted = `₹${totalPrice.toLocaleString("en-IN")}`
@@ -38,6 +56,10 @@ export default function Home() {
     const onScroll = () => setScrolled(window.scrollY > 60)
     window.addEventListener("scroll", onScroll, { passive: true })
     return () => window.removeEventListener("scroll", onScroll)
+  }, [])
+
+  useEffect(() => {
+    refreshSavedCount()
   }, [])
 
   const dynamicBgStyle = hasImage
@@ -66,6 +88,20 @@ export default function Home() {
   }
 
   async function handleImageUpload(file: File) {
+    // ── Save previous look pointer before resetting ────────────────────────
+    // If there's a current analysis, stash its hash + image so the user
+    // can tap "← Previous look" to return to it.
+    if (currentHash && uploadedImage) {
+      setPreviousHash(currentHash)
+      setPreviousImage(uploadedImage)
+      try { sessionStorage.setItem("irl_previous_hash", currentHash) } catch { /* ignore */ }
+    } else {
+      setPreviousHash(null)
+      setPreviousImage(null)
+      try { sessionStorage.removeItem("irl_previous_hash") } catch { /* ignore */ }
+    }
+    // ──────────────────────────────────────────────────────────────────────
+
     setError(null)
     setClothingItems([])
     setProductResults({})
@@ -73,45 +109,120 @@ export default function Home() {
     setSearchingItems({})
     setInferredProfile(null)
     setCoherenceScore(null)
+    setCurrentHash(null)
 
-    const reader = new FileReader()
-    reader.onload = async (e) => {
-      const dataUrl = e.target?.result as string
-      setUploadedImage(dataUrl)
-      setHasImage(true)
-      const palette = await extractColorFromImage(dataUrl)
-      applyColorToDom(palette)
-    }
-    reader.readAsDataURL(file)
+    // Read file → dataUrl first (needed for both preview and hashing)
+    const dataUrl = await new Promise<string>((resolve) => {
+      const reader = new FileReader()
+      reader.onload = (e) => resolve(e.target?.result as string)
+      reader.readAsDataURL(file)
+    })
+
+    setUploadedImage(dataUrl)
+    setHasImage(true)
+    // Color extraction is fire-and-forget — runs in parallel with analysis
+    extractColorFromImage(dataUrl).then(applyColorToDom)
 
     setIsAnalyzing(true)
     try {
-      const formData = new FormData()
-      formData.append("image", file)
+      // ── Cache lookup ──────────────────────────────────────────────────────
+      let items: ClothingItem[]
+      let profile: InferredProfile | undefined
 
-      const personalizationContext = getPersonalizationContext()
-      if (personalizationContext) {
-        formData.append("personalizationContext", personalizationContext)
+      let hash: string | null = null
+      try { hash = await hashImage(dataUrl) } catch { /* skip cache on hash failure */ }
+
+      if (hash) setCurrentHash(hash)
+
+      const cached = hash ? getCachedAnalysis(hash) : null
+
+      if (cached) {
+        // Cache hit — use stored result, skip Gemini entirely
+        items = cached.items
+        profile = cached.inferredProfile
+      } else {
+        // Cache miss — call Gemini as normal
+        const formData = new FormData()
+        formData.append("image", file)
+
+        const personalizationContext = getPersonalizationContext()
+        if (personalizationContext) {
+          formData.append("personalizationContext", personalizationContext)
+        }
+
+        const res = await fetch("/api/analyze", { method: "POST", body: formData })
+        const data: AnalyzeResponse = await res.json()
+
+        if (!data.items) {
+          setError((data as { error?: string }).error || "Analysis failed. Please try again.")
+          return
+        }
+
+        items = data.items
+        profile = data.inferredProfile
+
+        // Store result for future uploads of the same image
+        if (hash && profile) {
+          setCachedAnalysis(hash, items, profile)
+        }
+      }
+      // ─────────────────────────────────────────────────────────────────────
+
+      setClothingItems(items)
+
+      if (profile) {
+        setInferredProfile(profile)
+        updateProfileOnAnalysis(profile)
       }
 
-      const res = await fetch("/api/analyze", { method: "POST", body: formData })
-      const data: AnalyzeResponse = await res.json()
-
-      if (!data.items) { setError((data as { error?: string }).error || "Analysis failed. Please try again."); return }
-
-      setClothingItems(data.items)
-
-      if (data.inferredProfile) {
-        setInferredProfile(data.inferredProfile)
-        updateProfileOnAnalysis(data.inferredProfile)
-      }
-
-      data.items.forEach((item: ClothingItem) => searchForItem(item))
+      // Product searches always run fresh — prices change daily
+      items.forEach((item: ClothingItem) => searchForItem(item))
     } catch {
       setError("Something went wrong. Please try again.")
     } finally {
       setIsAnalyzing(false)
     }
+  }
+
+  async function handleRestorePreviousLook() {
+    if (!previousHash || !previousImage) return
+
+    const cached = getCachedAnalysis(previousHash)
+    if (!cached) {
+      // Cache was cleared — dismiss silently
+      setPreviousHash(null)
+      setPreviousImage(null)
+      try { sessionStorage.removeItem("irl_previous_hash") } catch { /* ignore */ }
+      return
+    }
+
+    // Restore the previous outfit
+    setUploadedImage(previousImage)
+    setHasImage(true)
+    extractColorFromImage(previousImage).then(applyColorToDom)
+
+    setClothingItems(cached.items)
+    setProductResults({})
+    setSearchingItems({})
+    setSelectedItems({})
+    setCoherenceScore(null)
+    setCartOpen(false)
+    setError(null)
+
+    if (cached.inferredProfile) {
+      setInferredProfile(cached.inferredProfile)
+    }
+
+    // The restored look is now the current one
+    setCurrentHash(previousHash)
+
+    // Consume the pointer — one level only
+    setPreviousHash(null)
+    setPreviousImage(null)
+    try { sessionStorage.removeItem("irl_previous_hash") } catch { /* ignore */ }
+
+    // Re-run Serper for fresh product cards
+    cached.items.forEach((item) => searchForItem(item))
   }
 
   function validateAndUpload(file: File) {
@@ -219,6 +330,10 @@ export default function Home() {
     setError(null)
     setInferredProfile(null)
     setCoherenceScore(null)
+    setCurrentHash(null)
+    setPreviousHash(null)
+    setPreviousImage(null)
+    try { sessionStorage.removeItem("irl_previous_hash") } catch { /* ignore */ }
     resetColorOnDom()
   }
 
@@ -254,23 +369,71 @@ export default function Home() {
               IRL
             </button>
 
-            {selectedCount > 0 && (
-              <button
-                onClick={() => setCartOpen(true)}
-                className="flex items-center gap-1.5 rounded-full text-white transition-all duration-150"
+            {/* Right side nav items */}
+            <div className="flex items-center gap-3">
+              {/* Saved link */}
+              <Link
+                href="/saved"
+                className="relative flex items-center gap-1.5 transition-all duration-150"
                 style={{
-                  border: "1px solid rgba(255,255,255,0.2)",
                   fontFamily: "var(--font-dm-sans)",
-                  fontWeight: 500,
-                  fontSize: "12px",
-                  padding: "6px 12px",
+                  fontWeight: 400,
+                  color: "rgba(255,255,255,0.55)",
+                  textDecoration: "none",
                   WebkitTapHighlightColor: "transparent",
                   minHeight: "36px",
                 }}
+                onMouseEnter={(e) => { (e.currentTarget as HTMLAnchorElement).style.color = "white" }}
+                onMouseLeave={(e) => { (e.currentTarget as HTMLAnchorElement).style.color = "rgba(255,255,255,0.55)" }}
               >
-                Look ({selectedCount})
-              </button>
-            )}
+                {/* Mobile: icon only */}
+                <span className="block md:hidden">
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
+                    <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/>
+                  </svg>
+                </span>
+                {/* Desktop: text */}
+                <span className="hidden md:block text-sm">Saved</span>
+
+                {/* Count badge */}
+                {savedCount > 0 && (
+                  <span
+                    className="flex items-center justify-center"
+                    style={{
+                      width: "16px", height: "16px",
+                      borderRadius: "50%",
+                      background: "rgba(255,255,255,0.2)",
+                      fontFamily: "var(--font-dm-sans)",
+                      fontWeight: 600,
+                      fontSize: "10px",
+                      color: "white",
+                      flexShrink: 0,
+                    }}
+                  >
+                    {savedCount > 9 ? "9+" : savedCount}
+                  </span>
+                )}
+              </Link>
+
+              {/* My Look cart button */}
+              {selectedCount > 0 && (
+                <button
+                  onClick={() => setCartOpen(true)}
+                  className="flex items-center gap-1.5 rounded-full text-white transition-all duration-150"
+                  style={{
+                    border: "1px solid rgba(255,255,255,0.2)",
+                    fontFamily: "var(--font-dm-sans)",
+                    fontWeight: 500,
+                    fontSize: "12px",
+                    padding: "6px 12px",
+                    WebkitTapHighlightColor: "transparent",
+                    minHeight: "36px",
+                  }}
+                >
+                  Look ({selectedCount})
+                </button>
+              )}
+            </div>
           </div>
         </nav>
       )}
@@ -350,6 +513,43 @@ export default function Home() {
           >
             InRealLife
           </div>
+
+          {/* Top-right — Saved link */}
+          <Link
+            href="/saved"
+            onClick={(e) => e.stopPropagation()}
+            className="flex items-center gap-1.5 transition-colors duration-200"
+            style={{
+              position: "fixed",
+              top: "12px",
+              right: "16px",
+              zIndex: 22,
+              fontFamily: "var(--font-dm-sans)",
+              fontWeight: 400,
+              fontSize: "13px",
+              color: "rgba(255,255,255,0.5)",
+              textDecoration: "none",
+              WebkitTapHighlightColor: "transparent",
+              padding: "4px",
+            }}
+            onMouseEnter={(e) => { (e.currentTarget as HTMLAnchorElement).style.color = "rgba(255,255,255,0.9)" }}
+            onMouseLeave={(e) => { (e.currentTarget as HTMLAnchorElement).style.color = "rgba(255,255,255,0.5)" }}
+          >
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
+              <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/>
+            </svg>
+            <span className="hidden md:inline">Saved</span>
+            {savedCount > 0 && (
+              <span style={{
+                display: "inline-flex", alignItems: "center", justifyContent: "center",
+                width: "16px", height: "16px", borderRadius: "50%",
+                background: "rgba(255,255,255,0.2)",
+                fontFamily: "var(--font-dm-sans)", fontWeight: 600, fontSize: "10px", color: "white",
+              }}>
+                {savedCount > 9 ? "9+" : savedCount}
+              </span>
+            )}
+          </Link>
 
           {/* Giant background text — mobile-first font size */}
           <div
@@ -544,6 +744,31 @@ export default function Home() {
                       Upload new ↑
                     </button>
                   </div>
+
+                  {/* Previous look — only visible when a prior analysis exists */}
+                  {previousHash && previousImage && (
+                    <button
+                      onClick={handleRestorePreviousLook}
+                      className="text-xs"
+                      style={{
+                        marginTop: "8px",
+                        fontFamily: "var(--font-dm-sans)",
+                        fontWeight: 400,
+                        color: "rgba(255,255,255,0.25)",
+                        background: "none",
+                        border: "none",
+                        cursor: "pointer",
+                        padding: 0,
+                        transition: "color 0.15s ease",
+                        WebkitTapHighlightColor: "transparent",
+                        display: "block",
+                      }}
+                      onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.color = "rgba(255,255,255,0.6)" }}
+                      onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.color = "rgba(255,255,255,0.25)" }}
+                    >
+                      ← Previous look
+                    </button>
+                  )}
                 </div>
 
                 {/* Right column */}
@@ -626,9 +851,12 @@ export default function Home() {
         selectedItems={selectedItems}
         clothingItems={clothingItems}
         totalFormatted={totalFormatted}
+        totalPrice={totalPrice}
         onRemove={handleRemoveFromLook}
         coherenceScore={coherenceScore}
         isScoringOutfit={isScoringOutfit}
+        uploadedImage={uploadedImage}
+        onLookSaved={refreshSavedCount}
       />
     </div>
   )

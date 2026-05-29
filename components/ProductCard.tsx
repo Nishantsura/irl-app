@@ -2,12 +2,15 @@
 
 import { useState } from "react"
 import { Product } from "@/types"
+import { isProductSaved, toggleSaveProduct } from "@/lib/savedItems"
 
 interface Props {
   product: Product
   isSelected: boolean
   onAdd: () => void
   animationDelay?: number
+  clothingCategory: string
+  clothingDescription: string
 }
 
 function StarRating({ rating }: { rating: number }) {
@@ -27,8 +30,15 @@ function StarRating({ rating }: { rating: number }) {
   )
 }
 
-export default function ProductCard({ product, isSelected, onAdd, animationDelay = 0 }: Props) {
+export default function ProductCard({ product, isSelected, onAdd, animationDelay = 0, clothingCategory, clothingDescription }: Props) {
   const [imgError, setImgError] = useState(false)
+  const [isSaved, setIsSaved] = useState(() => isProductSaved(product.link))
+
+  function handleBookmark(e: React.MouseEvent) {
+    e.stopPropagation()
+    const nowSaved = toggleSaveProduct(product, clothingCategory, clothingDescription)
+    setIsSaved(nowSaved)
+  }
 
   return (
     <div
@@ -64,7 +74,7 @@ export default function ProductCard({ product, isSelected, onAdd, animationDelay
     >
       {/* Image */}
       <div
-        className="w-full h-[148px] md:h-[160px] lg:h-[180px]"
+        className="w-full h-[148px] md:h-[160px] lg:h-[180px] relative"
         style={{ background: "#1e1e1e", borderBottom: "1px solid rgba(255,255,255,0.06)" }}
       >
         {!imgError && product.imageUrl ? (
@@ -82,6 +92,41 @@ export default function ProductCard({ product, isSelected, onAdd, animationDelay
             </svg>
           </div>
         )}
+
+        {/* Bookmark button — top-right corner of image */}
+        <button
+          onClick={handleBookmark}
+          className="absolute top-2 right-2 flex items-center justify-center backdrop-blur-sm transition-all duration-150"
+          style={{
+            width: "28px",
+            height: "28px",
+            borderRadius: "50%",
+            background: isSaved ? "rgba(255,255,255,0.2)" : "rgba(0,0,0,0.5)",
+            border: "none",
+            cursor: "pointer",
+            zIndex: 10,
+            color: "white",
+            WebkitTapHighlightColor: "transparent",
+          }}
+          onMouseEnter={(e) => {
+            const el = e.currentTarget as HTMLButtonElement
+            el.style.background = isSaved ? "rgba(255,255,255,0.3)" : "rgba(0,0,0,0.7)"
+          }}
+          onMouseLeave={(e) => {
+            const el = e.currentTarget as HTMLButtonElement
+            el.style.background = isSaved ? "rgba(255,255,255,0.2)" : "rgba(0,0,0,0.5)"
+          }}
+        >
+          {isSaved ? (
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
+              <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/>
+            </svg>
+          ) : (
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/>
+            </svg>
+          )}
+        </button>
       </div>
 
       {/* Body */}
@@ -168,7 +213,7 @@ export default function ProductCard({ product, isSelected, onAdd, animationDelay
           {isSelected ? "✓ Added" : "Add to Look"}
         </button>
 
-        {/* View product link — opens retailer page in new tab */}
+        {/* View product link */}
         <a
           href={product.link}
           target="_blank"

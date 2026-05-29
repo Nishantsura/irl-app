@@ -1,6 +1,7 @@
 import { GoogleGenerativeAI } from "@google/generative-ai"
 import { NextRequest, NextResponse } from "next/server"
 import type { InferredProfile, CoherenceScore } from "@/types"
+import { checkRateLimit, getClientIp } from "@/lib/rateLimit"
 
 const genAI = new GoogleGenerativeAI(process.env.GOOGLE_API_KEY!)
 
@@ -16,6 +17,16 @@ interface ScoreRequestBody {
 }
 
 export async function POST(request: NextRequest) {
+  // ── Rate limiting: 50 requests per IP per hour ─────────────────────────────
+  const ip = getClientIp(request)
+  if (!checkRateLimit(`${ip}:score`, 50)) {
+    return NextResponse.json(
+      { error: "Too many requests. Please try again later." },
+      { status: 429 }
+    )
+  }
+  // ──────────────────────────────────────────────────────────────────────────
+
   try {
     const body: ScoreRequestBody = await request.json()
     const { items, inferredProfile } = body
@@ -84,7 +95,7 @@ Return ONLY raw valid JSON. No markdown. No explanation. No text before or after
 Return exactly this structure:
 {"score":7.5,"style":"Minimal street","tip":"Add a thin tan leather belt at the waist to define the silhouette and break the oversized-on-oversized volume that currently flattens the proportions.","colorStory":"Earth tones with white anchor"}`
 
-    const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" })
+    const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash-lite" })
     const result = await model.generateContent(prompt)
     const responseText = result.response.text()
 

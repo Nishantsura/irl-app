@@ -1,6 +1,8 @@
 "use client"
 
+import { useState } from "react"
 import { ClothingItem, Product, SelectedItems, CoherenceScore } from "@/types"
+import { saveLook, getSavedLooks } from "@/lib/savedItems"
 
 interface Props {
   open: boolean
@@ -8,19 +10,119 @@ interface Props {
   selectedItems: SelectedItems
   clothingItems: ClothingItem[]
   totalFormatted: string
+  totalPrice: number
   onRemove: (itemId: string) => void
   coherenceScore: CoherenceScore | null
   isScoringOutfit: boolean
+  uploadedImage: string | null
+  onLookSaved: () => void
 }
 
-export default function MyLookCart({ open, onClose, selectedItems, clothingItems, totalFormatted, onRemove, coherenceScore, isScoringOutfit }: Props) {
+export default function MyLookCart({
+  open, onClose, selectedItems, clothingItems, totalFormatted, totalPrice,
+  onRemove, coherenceScore, isScoringOutfit, uploadedImage, onLookSaved
+}: Props) {
   const selectedCount = Object.keys(selectedItems).length
+  const [lookSaveState, setLookSaveState] = useState<"idle" | "saving" | "saved" | "full">("idle")
 
   function getCategoryForId(key: string): string {
-    // Key is composite: "${itemId}__${productLink}" — extract the itemId part
     const itemId = key.split("__")[0]
     const item = clothingItems.find((c) => c.id === itemId)
     return item ? item.category : "item"
+  }
+
+  async function handleSaveLook() {
+    if (!uploadedImage || lookSaveState !== "idle") return
+
+    // Check limit before saving
+    const existing = getSavedLooks()
+    if (existing.length >= 20) {
+      setLookSaveState("full")
+      return
+    }
+
+    setLookSaveState("saving")
+
+    const success = await saveLook(
+      uploadedImage,
+      selectedItems,
+      clothingItems,
+      totalPrice,
+      coherenceScore
+    )
+
+    if (success) {
+      setLookSaveState("saved")
+      onLookSaved()
+      setTimeout(() => setLookSaveState("idle"), 2000)
+    } else {
+      setLookSaveState("full")
+    }
+  }
+
+  function SaveLookButton() {
+    const isDisabled = lookSaveState === "saving" || lookSaveState === "full"
+    const isFull = lookSaveState === "full"
+    const isSaved = lookSaveState === "saved"
+    const isSaving = lookSaveState === "saving"
+
+    return (
+      <button
+        onClick={handleSaveLook}
+        disabled={isDisabled}
+        className="w-full flex items-center justify-center gap-2 transition-all duration-200"
+        style={{
+          height: "44px",
+          borderRadius: "10px",
+          border: isSaved
+            ? "1px solid rgba(255,255,255,0.4)"
+            : "1px solid rgba(255,255,255,0.2)",
+          background: "transparent",
+          fontFamily: "var(--font-dm-sans)",
+          fontWeight: 500,
+          fontSize: "13px",
+          color: "white",
+          cursor: isDisabled ? "not-allowed" : "pointer",
+          opacity: isFull ? 0.4 : 1,
+          marginBottom: "16px",
+          WebkitTapHighlightColor: "transparent",
+        }}
+        onMouseEnter={(e) => {
+          if (!isDisabled) (e.currentTarget as HTMLButtonElement).style.background = "rgba(255,255,255,0.08)"
+        }}
+        onMouseLeave={(e) => {
+          (e.currentTarget as HTMLButtonElement).style.background = "transparent"
+        }}
+      >
+        {isSaving ? (
+          <>
+            <div style={{
+              width: "12px", height: "12px", borderRadius: "50%",
+              border: "1.5px solid rgba(255,255,255,0.2)",
+              borderTop: "1.5px solid rgba(255,255,255,0.7)",
+              animation: "spin 0.8s linear infinite",
+            }} />
+            Saving...
+          </>
+        ) : isSaved ? (
+          <>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
+              <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/>
+            </svg>
+            Look Saved ✓
+          </>
+        ) : isFull ? (
+          "Saves full (20/20)"
+        ) : (
+          <>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/>
+            </svg>
+            Save this Look
+          </>
+        )}
+      </button>
+    )
   }
 
   return (
@@ -118,18 +220,10 @@ export default function MyLookCart({ open, onClose, selectedItems, clothingItems
                     <div className="flex gap-3 items-start">
                       <div
                         className="w-14 h-14 md:w-16 md:h-16 flex-shrink-0"
-                        style={{
-                          borderRadius: "8px",
-                          overflow: "hidden",
-                          background: "#1e1e1e",
-                        }}
+                        style={{ borderRadius: "8px", overflow: "hidden", background: "#1e1e1e" }}
                       >
                         {product.imageUrl ? (
-                          <img
-                            src={product.imageUrl}
-                            alt={product.title}
-                            className="w-full h-full object-cover"
-                          />
+                          <img src={product.imageUrl} alt={product.title} className="w-full h-full object-cover" />
                         ) : (
                           <div className="w-full h-full flex items-center justify-center">
                             <svg width="24" height="24" fill="none" stroke="rgba(255,255,255,0.2)" strokeWidth="1.5" viewBox="0 0 24 24">
@@ -142,33 +236,21 @@ export default function MyLookCart({ open, onClose, selectedItems, clothingItems
 
                       <div style={{ flex: 1, minWidth: 0, paddingLeft: "4px" }}>
                         <p style={{
-                          fontFamily: "var(--font-dm-sans)",
-                          fontWeight: 600,
-                          fontSize: "10px",
-                          color: "rgba(255,255,255,0.4)",
-                          letterSpacing: "1px",
-                          textTransform: "uppercase",
-                          marginBottom: "2px",
+                          fontFamily: "var(--font-dm-sans)", fontWeight: 600, fontSize: "10px",
+                          color: "rgba(255,255,255,0.4)", letterSpacing: "1px",
+                          textTransform: "uppercase", marginBottom: "2px",
                         }}>
                           {getCategoryForId(itemId)}
                         </p>
                         <p style={{
-                          fontFamily: "var(--font-dm-sans)",
-                          fontWeight: 500,
-                          fontSize: "14px",
-                          color: "white",
-                          overflow: "hidden",
-                          textOverflow: "ellipsis",
-                          whiteSpace: "nowrap",
+                          fontFamily: "var(--font-dm-sans)", fontWeight: 500, fontSize: "14px",
+                          color: "white", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
                         }}>
                           {product.brand}
                         </p>
                         <p style={{
-                          fontFamily: "var(--font-dm-sans)",
-                          fontWeight: 600,
-                          fontSize: "16px",
-                          color: "white",
-                          marginTop: "2px",
+                          fontFamily: "var(--font-dm-sans)", fontWeight: 600, fontSize: "16px",
+                          color: "white", marginTop: "2px",
                         }}>
                           {product.priceFormatted}
                         </p>
@@ -177,15 +259,9 @@ export default function MyLookCart({ open, onClose, selectedItems, clothingItems
                       <button
                         onClick={() => onRemove(itemId)}
                         style={{
-                          background: "none",
-                          border: "none",
-                          cursor: "pointer",
-                          color: "rgba(255,255,255,0.25)",
-                          fontSize: "18px",
-                          lineHeight: 1,
-                          padding: "4px",
-                          flexShrink: 0,
-                          transition: "color 0.15s ease",
+                          background: "none", border: "none", cursor: "pointer",
+                          color: "rgba(255,255,255,0.25)", fontSize: "18px", lineHeight: 1,
+                          padding: "4px", flexShrink: 0, transition: "color 0.15s ease",
                         }}
                         onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.color = "rgba(255,255,255,0.7)" }}
                         onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.color = "rgba(255,255,255,0.25)" }}
@@ -201,15 +277,10 @@ export default function MyLookCart({ open, onClose, selectedItems, clothingItems
                       rel="noopener noreferrer"
                       className="flex items-center justify-center h-9 md:h-10 text-xs md:text-[13px]"
                       style={{
-                        marginTop: "10px",
-                        borderRadius: "8px",
-                        border: "1px solid rgba(255,255,255,0.15)",
-                        background: "transparent",
-                        fontFamily: "var(--font-dm-sans)",
-                        fontWeight: 500,
-                        color: "white",
-                        textDecoration: "none",
-                        transition: "background 0.15s ease",
+                        marginTop: "10px", borderRadius: "8px",
+                        border: "1px solid rgba(255,255,255,0.15)", background: "transparent",
+                        fontFamily: "var(--font-dm-sans)", fontWeight: 500,
+                        color: "white", textDecoration: "none", transition: "background 0.15s ease",
                       }}
                       onMouseEnter={(e) => { (e.currentTarget as HTMLAnchorElement).style.background = "rgba(255,255,255,0.08)" }}
                       onMouseLeave={(e) => { (e.currentTarget as HTMLAnchorElement).style.background = "transparent" }}
@@ -232,95 +303,61 @@ export default function MyLookCart({ open, onClose, selectedItems, clothingItems
               background: "rgba(10,10,10,0.95)",
             }}
           >
-            {/* Coherence Score block — only when 2+ items selected */}
+            {/* Coherence Score block */}
             {selectedCount >= 2 && (
               <div style={{ marginBottom: "16px" }}>
                 {isScoringOutfit ? (
-                  /* Loading state — subtle, non-blocking */
                   <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
                     <div style={{
-                      width: "14px",
-                      height: "14px",
-                      borderRadius: "50%",
+                      width: "14px", height: "14px", borderRadius: "50%",
                       border: "1.5px solid rgba(255,255,255,0.1)",
                       borderTop: "1.5px solid rgba(255,255,255,0.5)",
-                      animation: "spin 0.8s linear infinite",
-                      flexShrink: 0,
+                      animation: "spin 0.8s linear infinite", flexShrink: 0,
                     }} />
                     <span style={{
-                      fontFamily: "var(--font-dm-sans)",
-                      fontWeight: 400,
-                      fontSize: "12px",
-                      color: "rgba(255,255,255,0.35)",
+                      fontFamily: "var(--font-dm-sans)", fontWeight: 400,
+                      fontSize: "12px", color: "rgba(255,255,255,0.35)",
                     }}>
                       Styling your look...
                     </span>
                   </div>
                 ) : coherenceScore ? (
-                  /* Score loaded */
                   <div>
-                    {/* Top row: score number + style label */}
                     <div style={{ display: "flex", alignItems: "flex-end", justifyContent: "space-between" }}>
                       <div style={{ display: "flex", alignItems: "flex-end", gap: "4px" }}>
                         <span
                           className="text-3xl md:text-[32px]"
-                          style={{
-                            fontFamily: "var(--font-serif)",
-                            color: "white",
-                            lineHeight: 1,
-                          }}
+                          style={{ fontFamily: "var(--font-serif)", color: "white", lineHeight: 1 }}
                         >
                           {coherenceScore.score.toFixed(1)}
                         </span>
                         <span style={{
-                          fontFamily: "var(--font-dm-sans)",
-                          fontWeight: 300,
-                          fontSize: "14px",
-                          color: "rgba(255,255,255,0.35)",
-                          paddingBottom: "3px",
+                          fontFamily: "var(--font-dm-sans)", fontWeight: 300,
+                          fontSize: "14px", color: "rgba(255,255,255,0.35)", paddingBottom: "3px",
                         }}>
                           /10
                         </span>
                       </div>
                       <span style={{
-                        fontFamily: "var(--font-dm-sans)",
-                        fontWeight: 500,
-                        fontSize: "12px",
-                        color: "white",
-                        letterSpacing: "0.3px",
-                        background: "rgba(255,255,255,0.08)",
-                        border: "1px solid rgba(255,255,255,0.12)",
-                        borderRadius: "999px",
-                        padding: "4px 12px",
+                        fontFamily: "var(--font-dm-sans)", fontWeight: 500, fontSize: "12px",
+                        color: "white", letterSpacing: "0.3px",
+                        background: "rgba(255,255,255,0.08)", border: "1px solid rgba(255,255,255,0.12)",
+                        borderRadius: "999px", padding: "4px 12px",
                       }}>
                         {coherenceScore.style}
                       </span>
                     </div>
-
-                    {/* Color story */}
                     <p style={{
-                      fontFamily: "var(--font-dm-sans)",
-                      fontWeight: 300,
-                      fontSize: "12px",
-                      color: "rgba(255,255,255,0.35)",
-                      fontStyle: "italic",
-                      marginTop: "4px",
+                      fontFamily: "var(--font-dm-sans)", fontWeight: 300,
+                      fontSize: "12px", color: "rgba(255,255,255,0.35)",
+                      fontStyle: "italic", marginTop: "4px",
                     }}>
                       {coherenceScore.colorStory}
                     </p>
-
-                    {/* Tip */}
-                    <div style={{
-                      borderLeft: "2px solid rgba(255,255,255,0.15)",
-                      paddingLeft: "10px",
-                      marginTop: "12px",
-                    }}>
+                    <div style={{ borderLeft: "2px solid rgba(255,255,255,0.15)", paddingLeft: "10px", marginTop: "12px" }}>
                       <p style={{
-                        fontFamily: "var(--font-dm-sans)",
-                        fontWeight: 400,
-                        fontSize: "13px",
-                        color: "rgba(255,255,255,0.55)",
-                        lineHeight: 1.5,
+                        fontFamily: "var(--font-dm-sans)", fontWeight: 400,
+                        fontSize: "13px", color: "rgba(255,255,255,0.55)", lineHeight: 1.5,
                       }}>
                         {coherenceScore.tip}
                       </p>
@@ -328,42 +365,32 @@ export default function MyLookCart({ open, onClose, selectedItems, clothingItems
                   </div>
                 ) : null}
 
-                {/* Divider between score block and total */}
                 {(isScoringOutfit || coherenceScore) && (
                   <div style={{ height: "1px", background: "rgba(255,255,255,0.06)", margin: "16px 0" }} />
                 )}
               </div>
             )}
 
+            {/* Save this Look button */}
+            <SaveLookButton />
+
             {/* Estimated Total */}
             <p style={{
-              fontFamily: "var(--font-dm-sans)",
-              fontWeight: 400,
-              fontSize: "13px",
-              color: "rgba(255,255,255,0.4)",
-              letterSpacing: "1px",
-              textTransform: "uppercase",
-              marginBottom: "4px",
+              fontFamily: "var(--font-dm-sans)", fontWeight: 400, fontSize: "13px",
+              color: "rgba(255,255,255,0.4)", letterSpacing: "1px",
+              textTransform: "uppercase", marginBottom: "4px",
             }}>
               Estimated Total
             </p>
             <p
               className="text-3xl md:text-4xl"
-              style={{
-                fontFamily: "var(--font-serif)",
-                color: "white",
-                letterSpacing: "-1px",
-                lineHeight: 1.1,
-              }}
+              style={{ fontFamily: "var(--font-serif)", color: "white", letterSpacing: "-1px", lineHeight: 1.1 }}
             >
               {totalFormatted}
             </p>
             <p style={{
-              fontFamily: "var(--font-dm-sans)",
-              fontWeight: 400,
-              fontSize: "11px",
-              color: "rgba(255,255,255,0.25)",
-              marginTop: "6px",
+              fontFamily: "var(--font-dm-sans)", fontWeight: 400, fontSize: "11px",
+              color: "rgba(255,255,255,0.25)", marginTop: "6px",
             }}>
               Final prices on retailer site
             </p>

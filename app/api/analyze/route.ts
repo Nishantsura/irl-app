@@ -1,9 +1,20 @@
-import { GoogleGenerativeAI } from "@google/generative-ai"
+import { GoogleGenerativeAI, HarmBlockThreshold, HarmCategory } from "@google/generative-ai"
 import { NextRequest, NextResponse } from "next/server"
+import { checkRateLimit, getClientIp } from "@/lib/rateLimit"
 
 const genAI = new GoogleGenerativeAI(process.env.GOOGLE_API_KEY!)
 
 export async function POST(request: NextRequest) {
+  // ── Rate limiting: 10 requests per IP per hour ─────────────────────────────
+  const ip = getClientIp(request)
+  if (!checkRateLimit(`${ip}:analyze`, 10)) {
+    return NextResponse.json(
+      { error: "Too many requests. Please try again later." },
+      { status: 429 }
+    )
+  }
+  // ──────────────────────────────────────────────────────────────────────────
+
   try {
     const formData = await request.formData()
     const file = formData.get("image") as File
@@ -26,7 +37,19 @@ export async function POST(request: NextRequest) {
     const buffer = Buffer.from(bytes)
     const base64Data = buffer.toString("base64")
 
-    const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" })
+    const model = genAI.getGenerativeModel({
+      model: "gemini-2.5-flash",
+      safetySettings: [
+        {
+          category: HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT,
+          threshold: HarmBlockThreshold.BLOCK_LOW_AND_ABOVE,
+        },
+        {
+          category: HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT,
+          threshold: HarmBlockThreshold.BLOCK_LOW_AND_ABOVE,
+        },
+      ],
+    })
 
     const personalizationBlock = personalizationContext
       ? `${personalizationContext}\n\n`
@@ -99,6 +122,17 @@ Return exactly this structure (with your actual data):
     }
 
     const result = await model.generateContent([prompt, imagePart])
+
+    // Detect safety block — Gemini sets finishReason to "SAFETY" when it
+    // rejects content that violates the configured harm thresholds.
+    const candidate = result.response.candidates?.[0]
+    if (!candidate || candidate.finishReason === "SAFETY") {
+      return NextResponse.json(
+        { error: "This image cannot be analyzed. Please upload a fashion photo." },
+        { status: 400 }
+      )
+    }
+
     const responseText = result.response.text()
 
     const cleaned = responseText
@@ -127,6 +161,15 @@ Return exactly this structure (with your actual data):
 
     return NextResponse.json({ items, inferredProfile: parsed.inferredProfile ?? null })
   } catch (error) {
+    // Gemini can throw when it blocks content at the request level (e.g. prompt
+    // feedback block) in addition to returning a SAFETY finishReason.
+    const msg = String((error as Error)?.message ?? "")
+    if (msg.toUpperCase().includes("SAFETY")) {
+      return NextResponse.json(
+        { error: "This image cannot be analyzed. Please upload a fashion photo." },
+        { status: 400 }
+      )
+    }
     console.error("Analyze error:", error)
     return NextResponse.json({ error: "Analysis failed. Please try again." }, { status: 500 })
   }
