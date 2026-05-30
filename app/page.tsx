@@ -20,7 +20,8 @@ export default function Home() {
   const [searchingItems, setSearchingItems] = useState<SearchingState>({})
   const [cartOpen, setCartOpen] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [scrolled, setScrolled] = useState(false)
+  const [scrollY, setScrollY] = useState(0)
+  const scrolled = scrollY > 60
   const [hasImage, setHasImage] = useState(false)
 
   // Home screen state
@@ -57,7 +58,7 @@ export default function Home() {
   const isHome = !uploadedImage && !isAnalyzing
 
   useEffect(() => {
-    const onScroll = () => setScrolled(window.scrollY > 60)
+    const onScroll = () => setScrollY(window.scrollY)
     window.addEventListener("scroll", onScroll, { passive: true })
     return () => window.removeEventListener("scroll", onScroll)
   }, [])
@@ -444,21 +445,28 @@ export default function Home() {
         <nav
           className="fixed top-0 left-0 right-0 z-50 transition-all duration-300"
           style={{
-            background: scrolled ? "rgba(10,10,10,0.85)" : "transparent",
+            background: (() => {
+              if (!scrolled) return "transparent"
+              // Mirror the page gradient: vibrant fades out, dark fades in over 60–700px scroll
+              const t = Math.min(1, (scrollY - 60) / 640)
+              const vOp = (0.88 * (1 - t * 0.9)).toFixed(2)  // 0.88 → ~0.09
+              const dOp = (t * 0.85).toFixed(2)               // 0 → 0.85
+              return `rgba(var(--color-vibrant-rgb),${vOp}), rgba(10,10,10,${dOp})`
+            })(),
             backdropFilter: scrolled ? "blur(20px)" : "none",
             borderBottom: scrolled ? "1px solid rgba(255,255,255,0.06)" : "none",
           }}
         >
-          <div className="flex items-center justify-between px-4 md:px-8 lg:px-12"
-            style={{ height: "56px", maxWidth: "1280px", margin: "0 auto" }}>
+          <div className="flex items-center justify-between h-14 lg:h-16 px-4 lg:px-10 xl:px-16"
+            style={{ maxWidth: "1280px", margin: "0 auto" }}>
             <button
               onClick={handleReset}
+              className="text-base lg:text-lg"
               style={{
                 background: "none",
                 border: "none",
                 cursor: "pointer",
                 fontFamily: "var(--font-serif)",
-                fontSize: "22px",
                 color: "white",
                 letterSpacing: "-0.5px",
                 padding: 0,
@@ -485,14 +493,14 @@ export default function Home() {
                 onMouseEnter={(e) => { (e.currentTarget as HTMLAnchorElement).style.color = "white" }}
                 onMouseLeave={(e) => { (e.currentTarget as HTMLAnchorElement).style.color = "rgba(255,255,255,0.55)" }}
               >
-                {/* Mobile: icon only */}
-                <span className="block md:hidden">
+                {/* Mobile/tablet: icon only */}
+                <span className="block lg:hidden">
                   <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
                     <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/>
                   </svg>
                 </span>
                 {/* Desktop: text */}
-                <span className="hidden md:block text-sm">Saved</span>
+                <span className="hidden lg:block text-sm">Saved</span>
 
                 {/* Count badge */}
                 {savedCount > 0 && (
@@ -518,18 +526,19 @@ export default function Home() {
               {selectedCount > 0 && (
                 <button
                   onClick={openCart}
-                  className="flex items-center gap-1.5 rounded-full text-white transition-all duration-150"
+                  className="flex items-center gap-1.5 rounded-full text-white transition-all duration-150 px-3 py-1.5 text-xs lg:px-5 lg:py-2 lg:text-sm"
                   style={{
                     border: "1px solid rgba(255,255,255,0.2)",
                     fontFamily: "var(--font-dm-sans)",
                     fontWeight: 500,
-                    fontSize: "12px",
-                    padding: "6px 12px",
                     WebkitTapHighlightColor: "transparent",
                     minHeight: "36px",
                   }}
+                  onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.background = "rgba(255,255,255,0.1)" }}
+                  onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.background = "transparent" }}
                 >
-                  Look ({selectedCount})
+                  <span className="lg:hidden">Look ({selectedCount})</span>
+                  <span className="hidden lg:inline">My Look · {selectedCount}</span>
                 </button>
               )}
             </div>
@@ -780,53 +789,50 @@ export default function Home() {
           {/* STATE C: Results */}
           {uploadedImage && !isAnalyzing && clothingItems.length > 0 && (
             <div
-              className="px-4 md:px-6 lg:px-8 xl:px-12 pt-16 md:pt-20 pb-8 md:pb-10 lg:pb-12 xl:pb-16"
+              className="px-5 md:px-6 lg:px-10 xl:px-16 pt-20 pb-8 md:pb-10 lg:pb-12 xl:pb-16"
               style={{ maxWidth: "1280px", margin: "0 auto" }}
             >
               {/* Two-column on lg+, single column below */}
-              <div className="flex flex-col lg:flex-row lg:gap-0 lg:items-start">
+              <div className="flex flex-col lg:flex-row lg:items-start">
 
-                {/* Left column — full width mobile, sticky 36% on lg+ */}
-                <div className="w-full lg:w-[36%] xl:w-[38%] lg:sticky lg:top-[72px] lg:self-start lg:pr-8 xl:pr-12 mb-6 md:mb-8 lg:mb-0">
+                {/* Left column — full width mobile, sticky 38% on lg+ */}
+                <div className="w-full lg:w-[38%] lg:flex-shrink-0 lg:sticky lg:top-[88px] lg:self-start mb-4 lg:mb-0 lg:pr-10">
 
                   {/* Image */}
                   <div
-                    className="rounded-xl md:rounded-[14px] lg:rounded-2xl overflow-hidden"
-                    style={{ background: "#111", boxShadow: "0 24px 56px rgba(0,0,0,0.6)" }}
+                    className="rounded-2xl overflow-hidden shadow-[0_8px_32px_rgba(0,0,0,0.5)] lg:shadow-[0_24px_48px_rgba(0,0,0,0.4)]"
+                    style={{ background: "#111", border: "1px solid rgba(255,255,255,0.07)" }}
                   >
                     <img
                       src={uploadedImage}
                       alt="Your outfit"
-                      className="w-full block object-contain"
-                      style={{ maxHeight: "60vw", height: "auto" }}
+                      className="w-full block object-cover max-h-[56vw] lg:max-h-[520px]"
                     />
                   </div>
 
                   {/* Meta row */}
-                  <div className="flex items-center justify-between mt-3 md:mt-4">
+                  <div className="flex items-center justify-between mt-3 lg:mt-4">
                     <span
-                      className="inline-flex items-center rounded-full uppercase"
+                      className="inline-flex items-center rounded-full uppercase text-[10px] lg:text-[11px]"
                       style={{
                         padding: "5px 12px",
-                        border: "1px solid rgba(255,255,255,0.12)",
+                        border: "1px solid rgba(255,255,255,0.15)",
                         fontFamily: "var(--font-dm-sans)",
-                        fontWeight: 500,
-                        fontSize: "10px",
+                        fontWeight: 600,
                         color: "rgba(255,255,255,0.5)",
-                        letterSpacing: "0.8px",
+                        letterSpacing: "1.5px",
+                        whiteSpace: "nowrap",
                       }}
                     >
                       {clothingItems.length} items found
                     </span>
                     <button
                       onClick={handleReset}
-                      className="text-xs md:text-sm"
                       style={{
                         fontFamily: "var(--font-dm-sans)",
                         fontWeight: 400,
-                        color: "rgba(255,255,255,0.3)",
-                        textDecoration: "underline",
-                        textUnderlineOffset: "3px",
+                        fontSize: "12px",
+                        color: "rgba(255,255,255,0.35)",
                         background: "none",
                         border: "none",
                         cursor: "pointer",
@@ -836,9 +842,10 @@ export default function Home() {
                         minHeight: "44px",
                         display: "flex",
                         alignItems: "center",
+                        whiteSpace: "nowrap",
                       }}
-                      onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.color = "rgba(255,255,255,0.65)" }}
-                      onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.color = "rgba(255,255,255,0.3)" }}
+                      onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.color = "rgba(255,255,255,0.7)" }}
+                      onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.color = "rgba(255,255,255,0.35)" }}
                     >
                       Upload new ↑
                     </button>
@@ -871,7 +878,7 @@ export default function Home() {
                 </div>
 
                 {/* Right column */}
-                <div className="w-full lg:w-[64%] xl:w-[62%] lg:pt-1">
+                <div className="w-full lg:w-[62%] mt-2 lg:mt-0">
                   <OutfitBreakdown
                     clothingItems={clothingItems}
                     productResults={productResults}

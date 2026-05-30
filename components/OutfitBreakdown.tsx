@@ -16,14 +16,14 @@ interface Props {
 function SkeletonCard() {
   return (
     <div
-      className="flex-shrink-0 animate-pulse min-w-[148px] w-[148px] md:min-w-[160px] md:w-[160px] lg:min-w-[180px] lg:w-[180px] rounded-xl md:rounded-[14px]"
+      className="flex-shrink-0 animate-pulse min-w-[152px] w-[152px] md:min-w-[165px] md:w-[165px] lg:min-w-[180px] lg:w-[180px] rounded-xl"
       style={{
         border: "1px solid rgba(255,255,255,0.06)",
         background: "rgba(255,255,255,0.03)",
         overflow: "hidden",
       }}
     >
-      <div className="w-full h-[148px] md:h-[160px] lg:h-[180px]" style={{ background: "rgba(255,255,255,0.05)" }} />
+      <div className="w-full h-[152px] md:h-[165px] lg:h-[180px]" style={{ background: "rgba(255,255,255,0.05)" }} />
       <div className="p-2.5 md:p-3">
         <div style={{ height: "10px", width: "60px", background: "rgba(255,255,255,0.05)", borderRadius: "4px", marginBottom: "10px" }} />
         <div style={{ height: "20px", width: "80px", background: "rgba(255,255,255,0.05)", borderRadius: "4px", marginBottom: "8px" }} />
@@ -71,11 +71,10 @@ function SectionWrapper({
   return (
     <div
       ref={ref}
-      className={`section-enter${!isLast ? " mb-8 md:mb-10 lg:mb-12 pb-8 md:pb-10 lg:pb-12" : ""}`}
+      className={`section-enter mb-8 lg:mb-10${index > 0 ? " pt-5 lg:pt-6 border-t border-white/[0.06]" : ""}`}
       style={{
         animationDelay: `${index * 0.1}s`,
         opacity: 0,
-        borderBottom: isLast ? "none" : "1px solid rgba(255,255,255,0.06)",
       }}
     >
       {children}
@@ -108,27 +107,28 @@ export default function OutfitBreakdown({ clothingItems, productResults, searchi
             onFired={() => {}}
           >
             {/* Section header */}
-            <div className="mb-4 md:mb-5">
+            <div className="mb-5 lg:mb-6">
               <p
-                className="text-[10px] md:text-[11px]"
+                className="text-2xl lg:text-3xl"
                 style={{
-                  fontFamily: "var(--font-dm-sans)",
-                  fontWeight: 600,
-                  color: "rgba(255,255,255,0.4)",
-                  letterSpacing: "2px",
-                  textTransform: "uppercase",
+                  fontFamily: "var(--font-serif)",
+                  color: "white",
+                  letterSpacing: "-0.3px",
+                  lineHeight: 1.15,
                   marginBottom: "6px",
                 }}
               >
                 {item.category}
               </p>
               <p
-                className="text-lg md:text-xl lg:text-2xl"
+                className="text-sm lg:text-base"
                 style={{
-                  fontFamily: "var(--font-serif)",
-                  color: "white",
-                  letterSpacing: "-0.3px",
-                  lineHeight: 1.3,
+                  fontFamily: "var(--font-dm-sans)",
+                  fontWeight: 400,
+                  color: "rgba(255,255,255,0.45)",
+                  lineHeight: 1.5,
+                  wordBreak: "break-word",
+                  overflowWrap: "break-word",
                 }}
               >
                 {item.description}
@@ -137,8 +137,8 @@ export default function OutfitBreakdown({ clothingItems, productResults, searchi
 
             {/* Cards row */}
             <div
-              className="scroll-x gap-2 md:gap-3"
-              style={{ display: "flex", paddingBottom: "8px" }}
+              className="scroll-x gap-2.5 lg:gap-3"
+              style={{ display: "flex", paddingBottom: "8px", paddingRight: "4px", WebkitOverflowScrolling: "touch" } as React.CSSProperties}
             >
               {isSearching ? (
                 <>
@@ -159,14 +159,14 @@ export default function OutfitBreakdown({ clothingItems, productResults, searchi
                   />
                 ))
               ) : (
-                <div style={{ padding: "16px 0" }}>
+                <div style={{ margin: "8px 0" }}>
                   <p style={{
                     fontFamily: "var(--font-dm-sans)",
-                    fontSize: "14px",
+                    fontSize: "13px",
                     color: "rgba(255,255,255,0.3)",
                     marginBottom: "6px",
                   }}>
-                    No matches found for this item.
+                    No matches found
                   </p>
                   <a
                     href={`https://www.google.com/search?tbm=shop&q=${encodeURIComponent(item.searchQuery)}`}
@@ -174,13 +174,14 @@ export default function OutfitBreakdown({ clothingItems, productResults, searchi
                     rel="noopener noreferrer"
                     style={{
                       fontFamily: "var(--font-dm-sans)",
-                      fontSize: "13px",
-                      color: "rgba(255,255,255,0.5)",
-                      textDecoration: "underline",
-                      textUnderlineOffset: "3px",
+                      fontSize: "12px",
+                      color: "rgba(255,255,255,0.25)",
+                      textDecoration: "none",
                     }}
+                    onMouseEnter={(e) => { (e.currentTarget as HTMLAnchorElement).style.textDecoration = "underline" }}
+                    onMouseLeave={(e) => { (e.currentTarget as HTMLAnchorElement).style.textDecoration = "none" }}
                   >
-                    Search manually on Google Shopping →
+                    Search on Google →
                   </a>
                 </div>
               )}

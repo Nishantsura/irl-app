@@ -57,7 +57,7 @@ export default function ProductCard({ product, isSelected, onAdd, animationDelay
 
   return (
     <div
-      className="card-enter cursor-pointer min-w-[148px] w-[148px] md:min-w-[160px] md:w-[160px] lg:min-w-[180px] lg:w-[180px] flex-shrink-0 rounded-xl md:rounded-[14px]"
+      className="card-enter cursor-pointer min-w-[152px] w-[152px] md:min-w-[165px] md:w-[165px] lg:min-w-[180px] lg:w-[180px] flex-shrink-0 rounded-xl"
       style={{
         border: isSelected
           ? "1px solid rgba(255,255,255,0.7)"
@@ -89,7 +89,7 @@ export default function ProductCard({ product, isSelected, onAdd, animationDelay
     >
       {/* Image */}
       <div
-        className="w-full h-[148px] md:h-[160px] lg:h-[180px] relative"
+        className="w-full h-[152px] md:h-[165px] lg:h-[180px] relative"
         style={{ background: "#1e1e1e", borderBottom: "1px solid rgba(255,255,255,0.06)" }}
       >
         {!imgError && product.imageUrl ? (
@@ -145,7 +145,7 @@ export default function ProductCard({ product, isSelected, onAdd, animationDelay
       </div>
 
       {/* Body */}
-      <div className="p-2.5 md:p-3">
+      <div className="p-3 md:p-3.5">
         <p
           className="text-[9px] md:text-[10px]"
           style={{
@@ -154,7 +154,7 @@ export default function ProductCard({ product, isSelected, onAdd, animationDelay
             color: "rgba(255,255,255,0.4)",
             letterSpacing: "1.5px",
             textTransform: "uppercase",
-            marginBottom: "4px",
+            marginBottom: "6px",
             overflow: "hidden",
             textOverflow: "ellipsis",
             whiteSpace: "nowrap",
@@ -169,40 +169,29 @@ export default function ProductCard({ product, isSelected, onAdd, animationDelay
             fontFamily: "var(--font-dm-sans)",
             fontWeight: 600,
             color: "white",
-            marginBottom: "6px",
+            marginBottom: "8px",
             lineHeight: 1.1,
           }}
         >
           {product.priceFormatted}
         </p>
 
-        <div style={{ marginBottom: "8px" }}>
-          {product.rating > 0 ? (
-            <div className="flex items-center gap-1">
-              <StarRating rating={product.rating} />
-              <span style={{
-                fontFamily: "var(--font-dm-sans)",
-                fontWeight: 400,
-                fontSize: "11px",
-                color: "rgba(255,255,255,0.5)",
-              }}>
-                {product.rating.toFixed(1)}
-                {product.reviewCount > 0 && (
-                  <span style={{ color: "rgba(255,255,255,0.3)" }}> ({product.reviewCount})</span>
-                )}
-              </span>
-            </div>
-          ) : (
+        {product.rating > 0 && (
+          <div className="flex items-center gap-1" style={{ marginBottom: "10px" }}>
+            <StarRating rating={product.rating} />
             <span style={{
               fontFamily: "var(--font-dm-sans)",
               fontWeight: 400,
               fontSize: "11px",
-              color: "rgba(255,255,255,0.25)",
+              color: "rgba(255,255,255,0.5)",
             }}>
-              No ratings
+              {product.rating.toFixed(1)}
+              {product.reviewCount > 0 && (
+                <span style={{ color: "rgba(255,255,255,0.3)" }}> ({product.reviewCount})</span>
+              )}
             </span>
-          )}
-        </div>
+          </div>
+        )}
 
         {/* Add to Look button */}
         <button
