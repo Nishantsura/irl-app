@@ -1,5 +1,7 @@
 import type { Metadata } from "next"
 import { DM_Serif_Display, DM_Sans } from "next/font/google"
+import { Analytics } from "@vercel/analytics/next"
+import { PostHogProvider } from "./providers"
 import "./globals.css"
 
 const dmSerifDisplay = DM_Serif_Display({
@@ -28,7 +30,12 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" className={`${dmSerifDisplay.variable} ${dmSans.variable} h-full antialiased`}>
-      <body className="min-h-full flex flex-col">{children}</body>
+      <PostHogProvider>
+        <body className="min-h-full flex flex-col">
+          {children}
+          <Analytics />
+        </body>
+      </PostHogProvider>
     </html>
   )
 }

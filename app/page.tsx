@@ -9,6 +9,7 @@ import { getSaveCounts } from "@/lib/savedItems"
 import { hashImage, getCachedAnalysis, setCachedAnalysis } from "@/lib/analysisCache"
 import OutfitBreakdown from "@/components/OutfitBreakdown"
 import MyLookCart from "@/components/MyLookCart"
+import { track, getSessionCount } from "@/lib/analytics"
 
 export default function Home() {
   const [uploadedImage, setUploadedImage] = useState<string | null>(null)
@@ -40,6 +41,9 @@ export default function Home() {
   // Feature: Save system — badge count in navbar
   const [savedCount, setSavedCount] = useState(0)
 
+  // Tracks if look_assembled has fired for the current analysis
+  const lookAssembledFired = useRef(false)
+
   function refreshSavedCount() {
     try {
       const { products, looks } = getSaveCounts()
@@ -62,6 +66,32 @@ export default function Home() {
     refreshSavedCount()
   }, [])
 
+  // app_opened — fires once on mount
+  useEffect(() => {
+    track("app_opened", {
+      source: document.referrer || "",
+      device: window.innerWidth < 768 ? "mobile" : "desktop",
+      is_returning: !!localStorage.getItem("irl_style_profile"),
+      hour_of_day: new Date().getHours(),
+      day_of_week: new Date().getDay(),
+    })
+  }, [])
+
+  // session_summary — fires on tab close/navigate away
+  useEffect(() => {
+    function handleBeforeUnload() {
+      track("session_summary", {
+        analyses_this_session: getSessionCount("outfit_uploaded"),
+        products_saved_this_session: getSessionCount("product_saved"),
+        looks_saved_this_session: getSessionCount("look_saved"),
+        hard_conversions_this_session: getSessionCount("buy_clicked"),
+        total_session_products_viewed: getSessionCount("clothing_section_viewed"),
+      })
+    }
+    window.addEventListener("beforeunload", handleBeforeUnload)
+    return () => window.removeEventListener("beforeunload", handleBeforeUnload)
+  }, [])
+
   const dynamicBgStyle = hasImage
     ? {
         background: `linear-gradient(180deg,
@@ -79,7 +109,17 @@ export default function Home() {
     try {
       const res = await fetch(`/api/search?q=${encodeURIComponent(item.searchQuery)}`)
       const data = await res.json()
-      setProductResults((prev) => ({ ...prev, [item.id]: data.products || [] }))
+      const products: Product[] = data.products || []
+      setProductResults((prev) => ({ ...prev, [item.id]: products }))
+      if (products.length === 0) {
+        track("no_results_found", { category: item.category, search_query: item.searchQuery })
+      } else {
+        track("search_completed", {
+          category: item.category,
+          results_count: products.length,
+          has_ratings: products.some((p) => p.rating > 0),
+        })
+      }
     } catch {
       setProductResults((prev) => ({ ...prev, [item.id]: [] }))
     } finally {
@@ -154,6 +194,7 @@ export default function Home() {
         const data: AnalyzeResponse = await res.json()
 
         if (!data.items) {
+          track("analysis_failed", { error_type: "parse_error" })
           setError((data as { error?: string }).error || "Analysis failed. Please try again.")
           return
         }
@@ -173,11 +214,25 @@ export default function Home() {
       if (profile) {
         setInferredProfile(profile)
         updateProfileOnAnalysis(profile)
+        track("analysis_completed", {
+          items_found: items.length,
+          aesthetic: profile.aesthetic,
+          gender: profile.gender,
+          occasion: profile.occasion,
+          dominant_colors: profile.dominantColors,
+          silhouettes: profile.silhouettes,
+          was_cached: !!cached,
+        })
       }
+
+      // Reset look_assembled tracker for this new analysis
+      lookAssembledFired.current = false
 
       // Product searches always run fresh — prices change daily
       items.forEach((item: ClothingItem) => searchForItem(item))
-    } catch {
+    } catch (err) {
+      const errorType = err instanceof TypeError ? "network" : "unknown"
+      track("analysis_failed", { error_type: errorType })
       setError("Something went wrong. Please try again.")
     } finally {
       setIsAnalyzing(false)
@@ -228,6 +283,11 @@ export default function Home() {
   function validateAndUpload(file: File) {
     const validTypes = ["image/jpeg", "image/png", "image/webp"]
     if (!validTypes.includes(file.type) || file.size > 5 * 1024 * 1024) return
+    track("outfit_uploaded", {
+      file_size_kb: Math.round(file.size / 1024),
+      file_type: file.type,
+      device: window.innerWidth < 768 ? "mobile" : "desktop",
+    })
     handleImageUpload(file)
   }
 
@@ -260,11 +320,38 @@ export default function Home() {
       let updated: SelectedItems
 
       if (prev[key]) {
+        // Deselecting
+        track("product_removed_from_look", {
+          category: itemId.split("__")[0],
+          brand: product.source,
+          price: product.price,
+        })
         updated = { ...prev }
         delete updated[key]
       } else {
         updateProfileOnSelection(product)
         updated = { ...prev, [key]: product }
+        const products = productResults[itemId] || []
+        const positionInResults = products.findIndex((p) => p.link === product.link)
+        const newCount = Object.keys(updated).length
+        track("product_added_to_look", {
+          category: itemId,
+          brand: product.source,
+          price: product.price,
+          position_in_results: positionInResults,
+          items_in_look_after: newCount,
+        })
+        // look_assembled fires once at 2 items per analysis session
+        if (newCount === 2 && !lookAssembledFired.current) {
+          lookAssembledFired.current = true
+          const uniqueSources = [...new Set(Object.values(updated).map((p) => p.source))]
+          track("look_assembled", {
+            items_count: newCount,
+            total_value: Object.values(updated).reduce((s, p) => s + p.price, 0),
+            retailers_included: uniqueSources,
+            has_score: coherenceScore !== null,
+          })
+        }
       }
 
       const count = Object.keys(updated).length
@@ -302,12 +389,24 @@ export default function Home() {
       const score: CoherenceScore & { error?: string } = await res.json()
       if (!score.error) {
         setCoherenceScore(score)
+        track("outfit_scored", {
+          score: score.score,
+          style_label: score.style,
+          color_story: score.colorStory,
+          items_count: Object.keys(currentSelected).length,
+          total_value: Object.values(currentSelected).reduce((s, p) => s + p.price, 0),
+        })
       }
     } catch {
       setCoherenceScore(null)
     } finally {
       setIsScoringOutfit(false)
     }
+  }
+
+  function openCart() {
+    setCartOpen(true)
+    track("cart_opened", { items_count: selectedCount, total_value: totalPrice })
   }
 
   function handleRemoveFromLook(itemId: string) {
@@ -418,7 +517,7 @@ export default function Home() {
               {/* My Look cart button */}
               {selectedCount > 0 && (
                 <button
-                  onClick={() => setCartOpen(true)}
+                  onClick={openCart}
                   className="flex items-center gap-1.5 rounded-full text-white transition-all duration-150"
                   style={{
                     border: "1px solid rgba(255,255,255,0.2)",
@@ -794,7 +893,7 @@ export default function Home() {
                         }}
                       >
                         <button
-                          onClick={() => setCartOpen(true)}
+                          onClick={openCart}
                           className="w-full flex items-center justify-center gap-2 text-white text-sm"
                           style={{
                             height: "48px",
@@ -814,7 +913,7 @@ export default function Home() {
                       {/* lg+: inline sticky button */}
                       <div className="hidden lg:block sticky bottom-4 mt-6">
                         <button
-                          onClick={() => setCartOpen(true)}
+                          onClick={openCart}
                           className="w-full flex items-center justify-center gap-2 text-white transition-all duration-200"
                           style={{
                             height: "52px",

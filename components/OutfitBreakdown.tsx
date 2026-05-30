@@ -1,7 +1,9 @@
 "use client"
 
+import { useEffect, useRef } from "react"
 import { ClothingItem, Product, ProductResults, SearchingState, SelectedItems } from "@/types"
 import ProductCard from "./ProductCard"
+import { track } from "@/lib/analytics"
 
 interface Props {
   clothingItems: ClothingItem[]
@@ -32,7 +34,63 @@ function SkeletonCard() {
   )
 }
 
+function SectionWrapper({
+  item,
+  index,
+  isLast,
+  children,
+  fired,
+  onFired,
+}: {
+  item: ClothingItem
+  index: number
+  isLast: boolean
+  children: React.ReactNode
+  fired: React.MutableRefObject<Set<string>>
+  onFired: () => void
+}) {
+  const ref = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    const el = ref.current
+    if (!el) return
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (entry.isIntersecting && !fired.current.has(item.id)) {
+          fired.current.add(item.id)
+          track("clothing_section_viewed", { category: item.category, position: index })
+          onFired()
+        }
+      },
+      { threshold: 0.5 }
+    )
+    observer.observe(el)
+    return () => observer.disconnect()
+  }, [item.id, item.category, index, fired, onFired])
+
+  return (
+    <div
+      ref={ref}
+      className={`section-enter${!isLast ? " mb-8 md:mb-10 lg:mb-12 pb-8 md:pb-10 lg:pb-12" : ""}`}
+      style={{
+        animationDelay: `${index * 0.1}s`,
+        opacity: 0,
+        borderBottom: isLast ? "none" : "1px solid rgba(255,255,255,0.06)",
+      }}
+    >
+      {children}
+    </div>
+  )
+}
+
 export default function OutfitBreakdown({ clothingItems, productResults, searchingItems, selectedItems, onAddToLook }: Props) {
+  const firedSections = useRef<Set<string>>(new Set())
+
+  // Reset fired set when clothing items change (new analysis)
+  useEffect(() => {
+    firedSections.current = new Set()
+  }, [clothingItems])
+
   return (
     <div style={{ display: "flex", flexDirection: "column" }}>
       {clothingItems.map((item, index) => {
@@ -41,14 +99,13 @@ export default function OutfitBreakdown({ clothingItems, productResults, searchi
         const isLast = index === clothingItems.length - 1
 
         return (
-          <div
+          <SectionWrapper
             key={item.id}
-            className={`section-enter${!isLast ? " mb-8 md:mb-10 lg:mb-12 pb-8 md:pb-10 lg:pb-12" : ""}`}
-            style={{
-              animationDelay: `${index * 0.1}s`,
-              opacity: 0,
-              borderBottom: isLast ? "none" : "1px solid rgba(255,255,255,0.06)",
-            }}
+            item={item}
+            index={index}
+            isLast={isLast}
+            fired={firedSections}
+            onFired={() => {}}
           >
             {/* Section header */}
             <div className="mb-4 md:mb-5">
@@ -128,7 +185,7 @@ export default function OutfitBreakdown({ clothingItems, productResults, searchi
                 </div>
               )}
             </div>
-          </div>
+          </SectionWrapper>
         )
       })}
     </div>

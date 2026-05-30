@@ -2,6 +2,7 @@
 
 import type { StyleProfile, InferredProfile } from "@/types"
 import type { Product } from "@/types"
+import { track } from "@/lib/analytics"
 
 const STORAGE_KEY = "irl_style_profile"
 const ACTIVATION_THRESHOLD = 3 // uploads needed before personalization activates
@@ -81,7 +82,19 @@ function topRetailers(
 export function updateProfileOnAnalysis(inferred: InferredProfile): void {
   const profile = getStyleProfile()
 
+  const prevUploads = profile.uploads
   profile.uploads += 1
+
+  // Fire personalization_activated exactly once at upload #3
+  if (prevUploads + 1 === 3) {
+    try {
+      const alreadyFired = localStorage.getItem("irl_personalization_fired")
+      if (!alreadyFired) {
+        track("personalization_activated", { upload_count: 3 })
+        localStorage.setItem("irl_personalization_fired", "1")
+      }
+    } catch { /* ignore */ }
+  }
 
   if (inferred.aesthetic && inferred.aesthetic !== "unknown") {
     profile.aesthetics = addUnique(profile.aesthetics, [inferred.aesthetic])

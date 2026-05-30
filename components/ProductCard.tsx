@@ -3,6 +3,7 @@
 import { useState } from "react"
 import { Product } from "@/types"
 import { isProductSaved, toggleSaveProduct } from "@/lib/savedItems"
+import { track } from "@/lib/analytics"
 
 interface Props {
   product: Product
@@ -38,6 +39,20 @@ export default function ProductCard({ product, isSelected, onAdd, animationDelay
     e.stopPropagation()
     const nowSaved = toggleSaveProduct(product, clothingCategory, clothingDescription)
     setIsSaved(nowSaved)
+    if (nowSaved) {
+      track("product_saved", {
+        category: clothingCategory,
+        brand: product.source,
+        price: product.price,
+        price_formatted: product.priceFormatted,
+      })
+    } else {
+      track("product_unsaved", {
+        category: clothingCategory,
+        brand: product.source,
+        price: product.price,
+      })
+    }
   }
 
   return (

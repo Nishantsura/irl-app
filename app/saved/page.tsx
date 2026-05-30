@@ -6,6 +6,7 @@ import { SavedProduct, SavedLook } from "@/types"
 import { getSavedProducts, getSavedLooks, unsaveProduct, deleteLook } from "@/lib/savedItems"
 import SavedProductCard from "@/components/SavedProductCard"
 import SavedLookCard from "@/components/SavedLookCard"
+import { track } from "@/lib/analytics"
 
 export default function SavedPage() {
   const [savedProducts, setSavedProducts] = useState<SavedProduct[]>([])
@@ -15,8 +16,15 @@ export default function SavedPage() {
 
   useEffect(() => {
     // localStorage is client-side only — read after mount
-    setSavedProducts(getSavedProducts())
-    setSavedLooks(getSavedLooks())
+    const products = getSavedProducts()
+    const looks = getSavedLooks()
+    setSavedProducts(products)
+    setSavedLooks(looks)
+    track("saved_page_viewed", {
+      saved_products_count: products.length,
+      saved_looks_count: looks.length,
+      active_tab: "products",
+    })
   }, [])
 
   useEffect(() => {

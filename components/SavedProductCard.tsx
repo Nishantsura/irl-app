@@ -2,6 +2,7 @@
 
 import { useState } from "react"
 import { SavedProduct } from "@/types"
+import { track } from "@/lib/analytics"
 
 interface Props {
   savedProduct: SavedProduct
@@ -88,6 +89,15 @@ export default function SavedProductCard({ savedProduct, onUnsave }: Props) {
             }}
             onMouseEnter={(e) => { (e.currentTarget as HTMLAnchorElement).style.background = "rgba(255,255,255,0.1)" }}
             onMouseLeave={(e) => { (e.currentTarget as HTMLAnchorElement).style.background = "transparent" }}
+            onClick={() => track("buy_clicked", {
+              retailer: product.source,
+              category,
+              price: product.price,
+              price_formatted: product.priceFormatted,
+              source: "saved_products",
+              look_total: product.price,
+              items_in_look: 1,
+            })}
           >
             Buy →
           </a>

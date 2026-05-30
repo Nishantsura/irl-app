@@ -2,6 +2,7 @@
 
 import { useState } from "react"
 import { SavedLook } from "@/types"
+import { track } from "@/lib/analytics"
 
 interface Props {
   savedLook: SavedLook
@@ -82,7 +83,21 @@ export default function SavedLookCard({ savedLook, onDelete }: Props) {
         <div
           className="flex-1 cursor-pointer"
           style={{ padding: "16px 20px" }}
-          onClick={() => setExpanded(!expanded)}
+          onClick={() => {
+            const next = !expanded
+            setExpanded(next)
+            if (next) {
+              const daysSince = Math.floor(
+                (Date.now() - new Date(savedLook.savedAt).getTime()) / 86400000
+              )
+              track("saved_look_opened", {
+                items_count: savedLook.itemCount,
+                total_value: savedLook.totalPrice,
+                days_since_saved: daysSince,
+                score: savedLook.coherenceScore?.score ?? null,
+              })
+            }
+          }}
         >
           {/* Top row: style + score */}
           <div className="flex items-start justify-between gap-3 mb-2">
@@ -319,6 +334,15 @@ export default function SavedLookCard({ savedLook, onDelete }: Props) {
                   }}
                   onMouseEnter={(e) => { (e.currentTarget as HTMLAnchorElement).style.background = "rgba(255,255,255,0.08)" }}
                   onMouseLeave={(e) => { (e.currentTarget as HTMLAnchorElement).style.background = "transparent" }}
+                  onClick={() => track("buy_clicked", {
+                    retailer: item.product.source,
+                    category: item.category,
+                    price: item.product.price,
+                    price_formatted: item.product.priceFormatted,
+                    source: "saved_looks",
+                    look_total: savedLook.totalPrice,
+                    items_in_look: savedLook.itemCount,
+                  })}
                 >
                   Buy on {item.product.source} →
                 </a>

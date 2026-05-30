@@ -3,6 +3,7 @@
 import { useState } from "react"
 import { ClothingItem, Product, SelectedItems, CoherenceScore } from "@/types"
 import { saveLook, getSavedLooks } from "@/lib/savedItems"
+import { track } from "@/lib/analytics"
 
 interface Props {
   open: boolean
@@ -54,6 +55,12 @@ export default function MyLookCart({
     if (success) {
       setLookSaveState("saved")
       onLookSaved()
+      track("look_saved", {
+        items_count: selectedCount,
+        total_value: totalPrice,
+        style_label: coherenceScore?.style || "unscored",
+        score: coherenceScore?.score ?? null,
+      })
       setTimeout(() => setLookSaveState("idle"), 2000)
     } else {
       setLookSaveState("full")
@@ -284,6 +291,15 @@ export default function MyLookCart({
                       }}
                       onMouseEnter={(e) => { (e.currentTarget as HTMLAnchorElement).style.background = "rgba(255,255,255,0.08)" }}
                       onMouseLeave={(e) => { (e.currentTarget as HTMLAnchorElement).style.background = "transparent" }}
+                      onClick={() => track("buy_clicked", {
+                        retailer: product.source,
+                        category: getCategoryForId(itemId),
+                        price: product.price,
+                        price_formatted: product.priceFormatted,
+                        source: "cart",
+                        look_total: totalPrice,
+                        items_in_look: selectedCount,
+                      })}
                     >
                       Buy on {product.source} →
                     </a>
