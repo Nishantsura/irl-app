@@ -12,6 +12,7 @@
   --color-vibrant: #1a1a1a;
   --color-dark-vibrant: #0a0a0a;
   --color-vibrant-rgb: 26, 26, 26;
+  --color-accent: #ff3c00;
   --color-border: rgba(255, 255, 255, 0.08);
   --color-border-hover: rgba(255, 255, 255, 0.16);
   --color-text-primary: #ffffff;
@@ -88,12 +89,3 @@ body::after {
   animation: spin 0.8s linear infinite;
 }
 
-@keyframes drift {
-  from { transform: translate(-50%, -50%) rotate(-4deg) translateX(-12px); }
-  to   { transform: translate(-50%, -50%) rotate(-4deg) translateX(12px); }
-}
-
-@keyframes pulse-crosshair {
-  0%, 100% { opacity: 0.9; transform: scale(1); }
-  50%       { opacity: 0.5; transform: scale(0.97); }
-}

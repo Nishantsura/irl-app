@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect, useRef, ChangeEvent, DragEvent } from "react"
+import { useState, useEffect, useRef } from "react"
 import Link from "next/link"
 import { ClothingItem, Product, ProductResults, SelectedItems, SearchingState, InferredProfile, CoherenceScore, AnalyzeResponse } from "@/types"
 import { extractColorFromImage, applyColorToDom, resetColorOnDom } from "@/lib/extractColor"
@@ -9,6 +9,7 @@ import { getSaveCounts } from "@/lib/savedItems"
 import { hashImage, getCachedAnalysis, setCachedAnalysis } from "@/lib/analysisCache"
 import OutfitBreakdown from "@/components/OutfitBreakdown"
 import MyLookCart from "@/components/MyLookCart"
+import HeroHome from "@/components/HeroHome"
 import { track, getSessionCount } from "@/lib/analytics"
 
 export default function Home() {
@@ -23,11 +24,6 @@ export default function Home() {
   const [scrollY, setScrollY] = useState(0)
   const scrolled = scrollY > 60
   const [hasImage, setHasImage] = useState(false)
-
-  // Home screen state
-  const fileInputRef = useRef<HTMLInputElement>(null)
-  const [homeDragging, setHomeDragging] = useState(false)
-  const [homeHover, setHomeHover] = useState(false)
 
   // Feature: Style Memory + Coherence Scoring
   const [inferredProfile, setInferredProfile] = useState<InferredProfile | null>(null)
@@ -66,6 +62,36 @@ export default function Home() {
   useEffect(() => {
     refreshSavedCount()
   }, [])
+
+  // ── Session restore — rehydrate results page after a refresh ─────────────
+  useEffect(() => {
+    try {
+      const savedImage = sessionStorage.getItem("irl_session_image")
+      const savedHash  = sessionStorage.getItem("irl_session_hash")
+      if (!savedImage || !savedHash) return
+
+      const cached = getCachedAnalysis(savedHash)
+      if (!cached) {
+        // Analysis cache was evicted — can't restore, clean up
+        sessionStorage.removeItem("irl_session_image")
+        sessionStorage.removeItem("irl_session_hash")
+        return
+      }
+
+      // Restore all results-page state
+      setUploadedImage(savedImage)
+      setHasImage(true)
+      setCurrentHash(savedHash)
+      setClothingItems(cached.items)
+      if (cached.inferredProfile) setInferredProfile(cached.inferredProfile)
+      extractColorFromImage(savedImage).then(applyColorToDom)
+
+      // Re-run product searches (prices may have changed)
+      cached.items.forEach((item) => searchForItem(item))
+    } catch { /* sessionStorage unavailable — skip silently */ }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+  // ──────────────────────────────────────────────────────────────────────────
 
   // app_opened — fires once on mount
   useEffect(() => {
@@ -212,6 +238,12 @@ export default function Home() {
 
       setClothingItems(items)
 
+      // Persist session so refresh restores the results page
+      try {
+        sessionStorage.setItem("irl_session_image", dataUrl)
+        if (hash) sessionStorage.setItem("irl_session_hash", hash)
+      } catch { /* quota exceeded — skip silently */ }
+
       if (profile) {
         setInferredProfile(profile)
         updateProfileOnAnalysis(profile)
@@ -290,29 +322,6 @@ export default function Home() {
       device: window.innerWidth < 768 ? "mobile" : "desktop",
     })
     handleImageUpload(file)
-  }
-
-  function handleHomeFileChange(e: ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0]
-    if (file) validateAndUpload(file)
-  }
-
-  function handleHomeDragOver(e: DragEvent<HTMLDivElement>) {
-    e.preventDefault()
-    setHomeDragging(true)
-  }
-
-  function handleHomeDragLeave(e: DragEvent<HTMLDivElement>) {
-    e.preventDefault()
-    if (e.currentTarget.contains(e.relatedTarget as Node)) return
-    setHomeDragging(false)
-  }
-
-  function handleHomeDrop(e: DragEvent<HTMLDivElement>) {
-    e.preventDefault()
-    setHomeDragging(false)
-    const file = e.dataTransfer.files?.[0]
-    if (file) validateAndUpload(file)
   }
 
   function handleAddToLook(itemId: string, product: Product) {
@@ -433,7 +442,11 @@ export default function Home() {
     setCurrentHash(null)
     setPreviousHash(null)
     setPreviousImage(null)
-    try { sessionStorage.removeItem("irl_previous_hash") } catch { /* ignore */ }
+    try {
+      sessionStorage.removeItem("irl_previous_hash")
+      sessionStorage.removeItem("irl_session_image")
+      sessionStorage.removeItem("irl_session_hash")
+    } catch { /* ignore */ }
     resetColorOnDom()
   }
 
@@ -546,190 +559,12 @@ export default function Home() {
         </nav>
       )}
 
-      {/* ── STATE A: Home Screen ── */}
-      {isHome && (
-        <div
-          onClick={() => fileInputRef.current?.click()}
-          onDragOver={handleHomeDragOver}
-          onDragLeave={handleHomeDragLeave}
-          onDrop={handleHomeDrop}
-          onMouseEnter={() => setHomeHover(true)}
-          onMouseLeave={() => setHomeHover(false)}
-          style={{
-            position: "relative",
-            width: "100vw",
-            height: "100vh",
-            overflow: "hidden",
-            cursor: "pointer",
-            background: "#0a0a0a",
-            boxShadow: homeDragging ? "inset 0 0 80px rgba(255,255,255,0.08)" : "none",
-            transition: "box-shadow 0.3s ease",
-            WebkitTapHighlightColor: "transparent",
-          }}
-        >
-          {/* Background video */}
-          <video
-            ref={(el) => {
-              if (!el) return
-              el.defaultMuted = true
-              el.muted = true
-              el.play().catch(() => {})
-            }}
-            autoPlay
-            loop
-            playsInline
-            preload="auto"
-            style={{
-              position: "absolute",
-              inset: 0,
-              width: "100%",
-              height: "100%",
-              objectFit: "cover",
-              zIndex: 0,
-              pointerEvents: "none",
-            }}
-          >
-            <source src="/home-bg.mp4" type="video/mp4" />
-          </video>
-
-          {/* Dark overlay */}
-          <div
-            style={{
-              position: "absolute",
-              inset: 0,
-              background: homeHover ? "rgba(0,0,0,0.55)" : "rgba(0,0,0,0.65)",
-              transition: "background 0.4s ease",
-              zIndex: 1,
-              pointerEvents: "none",
-            }}
-          />
-
-          {/* Top-left wordmark */}
-          <div
-            style={{
-              position: "fixed",
-              top: "16px",
-              left: "16px",
-              zIndex: 22,
-              fontFamily: "var(--font-serif)",
-              fontSize: "14px",
-              color: "white",
-              letterSpacing: "-0.3px",
-              fontWeight: 400,
-              pointerEvents: "none",
-            }}
-          >
-            InRealLife
-          </div>
-
-          {/* Top-right — Saved link */}
-          <Link
-            href="/saved"
-            onClick={(e) => e.stopPropagation()}
-            className="flex items-center gap-1.5 transition-colors duration-200"
-            style={{
-              position: "fixed",
-              top: "12px",
-              right: "16px",
-              zIndex: 22,
-              fontFamily: "var(--font-dm-sans)",
-              fontWeight: 400,
-              fontSize: "13px",
-              color: "rgba(255,255,255,0.5)",
-              textDecoration: "none",
-              WebkitTapHighlightColor: "transparent",
-              padding: "4px",
-            }}
-            onMouseEnter={(e) => { (e.currentTarget as HTMLAnchorElement).style.color = "rgba(255,255,255,0.9)" }}
-            onMouseLeave={(e) => { (e.currentTarget as HTMLAnchorElement).style.color = "rgba(255,255,255,0.5)" }}
-          >
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
-              <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/>
-            </svg>
-            <span className="hidden md:inline">Saved</span>
-            {savedCount > 0 && (
-              <span style={{
-                display: "inline-flex", alignItems: "center", justifyContent: "center",
-                width: "16px", height: "16px", borderRadius: "50%",
-                background: "rgba(255,255,255,0.2)",
-                fontFamily: "var(--font-dm-sans)", fontWeight: 600, fontSize: "10px", color: "white",
-              }}>
-                {savedCount > 9 ? "9+" : savedCount}
-              </span>
-            )}
-          </Link>
-
-          {/* Giant background text — mobile-first font size */}
-          <div
-            style={{
-              position: "absolute",
-              top: "50%",
-              left: "50%",
-              fontFamily: "var(--font-serif)",
-              fontSize: "clamp(80px, 20vw, 280px)",
-              color: "rgba(255,255,255,0.07)",
-              whiteSpace: "nowrap",
-              lineHeight: 1,
-              animation: "drift 40s linear infinite alternate",
-              animationFillMode: "both",
-              pointerEvents: "none",
-              userSelect: "none",
-              zIndex: 2,
-            }}
-          >
-            InRealLife
-          </div>
-
-          {/* Crosshair + label */}
-          <div
-            style={{
-              position: "absolute",
-              top: "75%",
-              left: "50%",
-              transform: "translate(-50%, -50%)",
-              display: "flex",
-              flexDirection: "column",
-              alignItems: "center",
-              zIndex: 12,
-              pointerEvents: "none",
-            }}
-          >
-            <div style={{ animation: "pulse-crosshair 3s ease-in-out infinite" }}>
-              {/* Responsive crosshair via CSS class */}
-              <svg className="w-[52px] h-[52px] md:w-[64px] md:h-[64px] lg:w-[72px] lg:h-[72px]" viewBox="0 0 72 72" fill="none">
-                <line x1="36" y1="0" x2="36" y2="72" stroke="white" strokeWidth="1"
-                  strokeOpacity={homeHover ? "1" : "0.9"} style={{ transition: "stroke-opacity 0.3s ease" }} />
-                <line x1="0" y1="36" x2="72" y2="36" stroke="white" strokeWidth="1"
-                  strokeOpacity={homeHover ? "1" : "0.9"} style={{ transition: "stroke-opacity 0.3s ease" }} />
-                <circle cx="36" cy="36" r="3" fill="white" fillOpacity="0.9" />
-              </svg>
-            </div>
-
-            <p
-              className="text-xs md:text-sm"
-              style={{
-                marginTop: "14px",
-                fontFamily: "var(--font-dm-sans)",
-                fontWeight: 300,
-                color: homeHover ? "rgba(255,255,255,0.7)" : "rgba(255,255,255,0.4)",
-                letterSpacing: "0.5px",
-                textAlign: "center",
-                transition: "color 0.3s ease",
-              }}
-            >
-              drop your fit bish
-            </p>
-          </div>
-
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept="image/jpeg,image/png,image/webp"
-            onChange={handleHomeFileChange}
-            onClick={(e) => e.stopPropagation()}
-            style={{ display: "none" }}
-          />
-        </div>
+      {/* ── STATE A: Hero Home ── */}
+      {!uploadedImage && !isAnalyzing && (
+        <HeroHome
+          onImageSelected={validateAndUpload}
+          isAnalyzing={isAnalyzing}
+        />
       )}
 
       {/* ── STATE B: Analyzing ── */}
