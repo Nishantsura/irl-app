@@ -87,7 +87,7 @@ export default function Home() {
       extractColorFromImage(savedImage).then(applyColorToDom)
 
       // Re-run product searches (prices may have changed)
-      cached.items.forEach((item) => searchForItem(item))
+      cached.items.forEach((item) => searchForItem(item, cached.inferredProfile ?? null))
     } catch { /* sessionStorage unavailable — skip silently */ }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
@@ -131,10 +131,19 @@ export default function Home() {
       }
     : {}
 
-  async function searchForItem(item: ClothingItem) {
+  async function searchForItem(item: ClothingItem, profile: InferredProfile | null) {
     setSearchingItems((prev) => ({ ...prev, [item.id]: true }))
     try {
-      const res = await fetch(`/api/search?q=${encodeURIComponent(item.searchQuery)}`)
+      const res = await fetch("/api/search", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          searchQueries: item.searchQueries || [item.searchQuery],
+          gender: profile?.gender || "unknown",
+          description: item.description,
+          category: item.category,
+        }),
+      })
       const data = await res.json()
       const products: Product[] = data.products || []
       setProductResults((prev) => ({ ...prev, [item.id]: products }))
@@ -262,7 +271,7 @@ export default function Home() {
       lookAssembledFired.current = false
 
       // Product searches always run fresh — prices change daily
-      items.forEach((item: ClothingItem) => searchForItem(item))
+      items.forEach((item: ClothingItem) => searchForItem(item, profile ?? null))
     } catch (err) {
       const errorType = err instanceof TypeError ? "network" : "unknown"
       track("analysis_failed", { error_type: errorType })
@@ -310,7 +319,7 @@ export default function Home() {
     try { sessionStorage.removeItem("irl_previous_hash") } catch { /* ignore */ }
 
     // Re-run Serper for fresh product cards
-    cached.items.forEach((item) => searchForItem(item))
+    cached.items.forEach((item) => searchForItem(item, cached.inferredProfile ?? null))
   }
 
   function validateAndUpload(file: File) {

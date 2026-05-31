@@ -68,28 +68,30 @@ If an item is partially visible, still include it.
 For each item provide exactly three fields:
 - category: ONE word describing the item type (jacket, top, jeans, sneakers, bag, belt, dupatta, kurta, etc.)
 - description: specific visual description including color, style, fit, pattern, fabric if visible
-- searchQuery: a 6-8 word search query to find this exact item on Myntra or Ajio
+- searchQueries: an array of EXACTLY 3 search queries to find this item, ordered by specificity:
+  1. SPECIFIC (6-8 words): precise description — fabric, fit, color, pattern, gender, "India"
+  2. BRANDED (6-8 words): same item but phrased to surface branded results — include "branded" or a retailer name (Myntra, Ajio, H&M, Zara). E.g. "branded oversized linen shirt women Myntra"
+  3. FALLBACK (4-5 words): broader category search for backup. E.g. "oversized linen shirt women India"
 
-RULES FOR searchQuery:
+RULES FOR searchQueries:
 ✓ Include fabric if visible: linen, cotton, denim, silk, chiffon, leather, suede, georgette
 ✓ Include fit: fitted, relaxed, oversized, straight, wide-leg, slim, A-line
 ✓ Include gender: women or men (match the outfit's styling)
-✓ End with: India
-✓ Be specific — describe what makes this item distinct
+✓ End with: India (for specific and fallback queries)
+✓ Be specific in query 1 — describe what makes this item distinct
+✓ Query 2 must include "branded" or a specific retailer/brand name
+✓ Query 3 should be shorter and broader — category + key attribute + gender
 ✗ Do NOT use: casual, solid, simple, basic, nice (too generic, surfaces budget results)
 ✗ Do NOT use Indian e-commerce buzzwords: stylish, trendy, fashionable
 
-Good searchQuery examples:
-"oversized linen shirt dropped shoulder relaxed fit women India"
-"straight leg light wash high waist denim jeans women India"
-"white chunky leather platform sneakers women India"
-"small structured leather crossbody bag chain strap women India"
-"wide leg palazzo trousers flowy fabric women India"
+Good searchQueries examples:
+["oversized linen shirt dropped shoulder relaxed fit women India", "branded oversized linen shirt women Myntra", "oversized linen shirt women India"]
+["straight leg light wash high waist denim jeans women India", "branded high waist straight jeans women Ajio", "straight leg light wash jeans women"]
+["white chunky leather platform sneakers women India", "branded white platform sneakers women H&M", "white platform sneakers women India"]
 
-Bad searchQuery examples (do not do this):
-"casual white shirt women India" ← too generic
-"stylish blue jeans India" ← useless descriptor
-"nice bag women India" ← not searchable
+Bad searchQueries examples (do not do this):
+["casual white shirt women India", ...] ← too generic
+["stylish blue jeans India", ...] ← useless descriptor
 
 TASK 2 — INFER STYLE PROFILE:
 Based on the complete outfit aesthetic, infer the following about the person this outfit is for.
@@ -107,12 +109,12 @@ Choose ONLY from the provided options for each field.
 CRITICAL OUTPUT RULES:
 - Return ONLY raw valid JSON. No markdown. No code fences. No explanation before or after.
 - The JSON must contain exactly two top-level keys: "items" and "inferredProfile"
-- Every clothing item must have all three fields: category, description, searchQuery
+- Every clothing item must have all three fields: category, description, searchQueries
 - inferredProfile must always be present — use "unknown" for anything unclear
 - Do not add any fields not specified above
 
 Return exactly this structure (with your actual data):
-{"items":[{"category":"jacket","description":"Oversized olive green canvas utility jacket with multiple chest pockets and dropped shoulders","searchQuery":"oversized canvas utility jacket dropped shoulder women India"},{"category":"top","description":"White fitted ribbed crop tank top, cropped at midriff","searchQuery":"white ribbed fitted crop tank top women India"},{"category":"jeans","description":"Straight leg light wash denim jeans, high waist, full length","searchQuery":"straight leg light wash high waist denim jeans women India"}],"inferredProfile":{"gender":"women","ageRange":"20s","aesthetic":"streetwear","occasion":"casual","dominantColors":["olive green","white","light wash denim"],"silhouettes":["oversized","fitted","straight"]}}`
+{"items":[{"category":"jacket","description":"Oversized olive green canvas utility jacket with multiple chest pockets and dropped shoulders","searchQueries":["oversized canvas utility jacket dropped shoulder women India","branded oversized utility jacket women Myntra","oversized utility jacket women India"]},{"category":"top","description":"White fitted ribbed crop tank top, cropped at midriff","searchQueries":["white ribbed fitted crop tank top women India","branded ribbed crop top women H&M","white crop tank top women India"]},{"category":"jeans","description":"Straight leg light wash denim jeans, high waist, full length","searchQueries":["straight leg light wash high waist denim jeans women India","branded straight leg high waist jeans women Ajio","straight leg light wash jeans women India"]}],"inferredProfile":{"gender":"women","ageRange":"20s","aesthetic":"streetwear","occasion":"casual","dominantColors":["olive green","white","light wash denim"],"silhouettes":["oversized","fitted","straight"]}}`
 
     const imagePart = {
       inlineData: {
@@ -141,7 +143,7 @@ Return exactly this structure (with your actual data):
       .trim()
 
     let parsed: {
-      items: Array<{ category: string; description: string; searchQuery: string }>
+      items: Array<{ category: string; description: string; searchQuery?: string; searchQueries?: string[] }>
       inferredProfile?: unknown
     }
     try {
@@ -157,6 +159,8 @@ Return exactly this structure (with your actual data):
     const items = parsed.items.map((item, index) => ({
       ...item,
       id: String(index),
+      searchQueries: item.searchQueries || (item.searchQuery ? [item.searchQuery] : []),
+      searchQuery: item.searchQueries?.[0] || item.searchQuery || "",
     }))
 
     return NextResponse.json({ items, inferredProfile: parsed.inferredProfile ?? null })
