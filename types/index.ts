@@ -3,6 +3,7 @@ export interface ClothingItem {
   category: string
   description: string
   searchQuery: string
+  searchQueries: string[]
 }
 
 export interface Product {
