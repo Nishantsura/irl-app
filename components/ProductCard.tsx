@@ -12,6 +12,7 @@ interface Props {
   animationDelay?: number
   clothingCategory: string
   clothingDescription: string
+
 }
 
 function StarRating({ rating }: { rating: number }) {
@@ -142,6 +143,8 @@ export default function ProductCard({ product, isSelected, onAdd, animationDelay
             </svg>
           )}
         </button>
+
+
       </div>
 
       {/* Body */}

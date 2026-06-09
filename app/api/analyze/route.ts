@@ -37,20 +37,6 @@ export async function POST(request: NextRequest) {
     const buffer = Buffer.from(bytes)
     const base64Data = buffer.toString("base64")
 
-    const model = genAI.getGenerativeModel({
-      model: "gemini-2.5-flash",
-      safetySettings: [
-        {
-          category: HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT,
-          threshold: HarmBlockThreshold.BLOCK_LOW_AND_ABOVE,
-        },
-        {
-          category: HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT,
-          threshold: HarmBlockThreshold.BLOCK_LOW_AND_ABOVE,
-        },
-      ],
-    })
-
     const personalizationBlock = personalizationContext
       ? `${personalizationContext}\n\n`
       : ""
@@ -123,11 +109,49 @@ Return exactly this structure (with your actual data):
       },
     }
 
-    const result = await model.generateContent([prompt, imagePart])
+    // Try primary model first, fall back to gemini-2.0-flash if overloaded
+    const FALLBACK_MODELS = ["gemini-2.5-flash", "gemini-2.0-flash"]
+
+    async function generateWithFallback() {
+      for (const modelName of FALLBACK_MODELS) {
+        const m = genAI.getGenerativeModel({
+          model: modelName,
+          safetySettings: [
+            { category: HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT, threshold: HarmBlockThreshold.BLOCK_LOW_AND_ABOVE },
+            { category: HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT, threshold: HarmBlockThreshold.BLOCK_LOW_AND_ABOVE },
+          ],
+          // gemini-2.5-flash has thinking enabled by default; SDK v0.24.x includes
+          // thought parts in response.text(), which breaks JSON.parse. Disable it.
+          generationConfig: modelName === "gemini-2.5-flash"
+            ? ({ thinkingConfig: { thinkingBudget: 0 } } as Record<string, unknown>)
+            : undefined,
+        })
+        // 2 attempts per model with backoff
+        for (let attempt = 0; attempt < 2; attempt++) {
+          try {
+            return await m.generateContent([prompt, imagePart])
+          } catch (err) {
+            const msg = String((err as Error)?.message ?? "")
+            const status = (err as { status?: number })?.status
+            const isOverloaded = status === 503 || msg.includes("503") || msg.toLowerCase().includes("overloaded") || msg.toLowerCase().includes("high demand")
+            if (isOverloaded) {
+              if (attempt === 0) {
+                await new Promise((r) => setTimeout(r, 1500))
+                continue // retry same model once
+              }
+              break // move to next fallback model
+            }
+            throw err // non-retriable — rethrow
+          }
+        }
+      }
+      throw new Error("All models overloaded. Please try again in a moment.")
+    }
+    const result2 = await generateWithFallback()
 
     // Detect safety block — Gemini sets finishReason to "SAFETY" when it
     // rejects content that violates the configured harm thresholds.
-    const candidate = result.response.candidates?.[0]
+    const candidate = result2.response.candidates?.[0]
     if (!candidate || candidate.finishReason === "SAFETY") {
       return NextResponse.json(
         { error: "This image cannot be analyzed. Please upload a fashion photo." },
@@ -135,7 +159,7 @@ Return exactly this structure (with your actual data):
       )
     }
 
-    const responseText = result.response.text()
+    const responseText = result2.response.text()
 
     const cleaned = responseText
       .replace(/```json\n?/g, "")
